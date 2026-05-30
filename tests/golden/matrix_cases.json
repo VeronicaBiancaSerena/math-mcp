@@ -1,0 +1,8 @@
+[
+  {"tool":"matrix_compute","input":{"operation":"det","payload":{"matrix":[["1","2"],["3","4"]]}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","method":"backend","result_kind":"value","result":"-2"}},
+  {"tool":"matrix_compute","input":{"operation":"rank","payload":{"matrix":[["1","2"],["2","4"]]}},
+   "expected":{"ok":true,"certainty":"exact","result":1}},
+  {"tool":"matrix_compute","input":{"operation":"trace","payload":{"matrix":[["1","2"],["3","4"]]}},
+   "expected":{"ok":true,"certainty":"exact","result":"5"}}
+]

@@ -1,0 +1,10 @@
+[
+  {"tool":"discrete_compute","input":{"operation":"combinatorics_count","payload":{"kind":"combination","n":"10","k":"3"}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","result_kind":"value","result":"120"}},
+  {"tool":"discrete_compute","input":{"operation":"combinatorics_count","payload":{"kind":"factorial","n":"5"}},
+   "expected":{"ok":true,"result":"120"}},
+  {"tool":"discrete_compute","input":{"operation":"finite_enumeration","payload":{"predicate":"Eq(x + y, 3)","variables":["x","y"]},"domains":[{"variable":"x","kind":"integer","lower":"0","upper":"3"},{"variable":"y","kind":"integer","lower":"0","upper":"3"}]},
+   "expected":{"ok":true,"status":"proved_by_finite_exhaustion","certainty":"proved","method":"finite_exhaustive","result_kind":"verification"}},
+  {"tool":"discrete_compute","input":{"operation":"solve_recurrence","payload":{"recurrence":"f(n) - 2*f(n-1)","function":"f","variable":"n","initial_conditions":{"0":"1"}}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","method":"symbolic","result_kind":"value","result":"2**n"}}
+]

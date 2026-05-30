@@ -1,0 +1,6 @@
+[
+  {"tool":"inequality_compute","input":{"operation":"inequality_domain_solve","payload":{"expression":"x**2 - 1","relation":">=","variable":"x"}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","method":"symbolic","result_kind":"solution_set","result":"Union(Interval(-oo, -1), Interval(1, oo))"}},
+  {"tool":"inequality_compute","input":{"operation":"inequality_check_symbolic","payload":{"left":"x**2 + 1","relation":">","right":"0","variables":["x"]}},
+   "expected":{"ok":true,"status":"proved_by_symbolic_simplification","certainty":"proved","result":{"holds":true}}}
+]

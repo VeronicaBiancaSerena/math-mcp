@@ -1,0 +1,10 @@
+[
+  {"tool":"algebra_compute","input":{"operation":"simplify_expression","payload":{"expression":"sin(x)**2 + cos(x)**2 - 1","variables":["x"]}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","method":"backend","result_kind":"value","result":"0"}},
+  {"tool":"algebra_compute","input":{"operation":"factor_expression","payload":{"expression":"x**2 - 1","variables":["x"]}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","result":"(x - 1)*(x + 1)"}},
+  {"tool":"algebra_compute","input":{"operation":"expand_expression","payload":{"expression":"(x + 1)**2","variables":["x"]}},
+   "expected":{"ok":true,"result":"x**2 + 2*x + 1"}},
+  {"tool":"algebra_compute","input":{"operation":"solve_equation","payload":{"expression":"x**2 - 5*x + 6","variable":"x"}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","result_kind":"solution_set","result":["2","3"]}}
+]

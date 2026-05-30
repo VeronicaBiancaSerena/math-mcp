@@ -1,0 +1,6 @@
+[
+  {"tool":"complex_compute","input":{"operation":"complex_mod_arg","payload":{"expression":"1 + I"}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","method":"symbolic","result_kind":"object","result":{"modulus":"sqrt(2)","argument":"pi/4","conjugate":"1 - I","real_part":"1","imag_part":"1"}}},
+  {"tool":"complex_compute","input":{"operation":"complex_simplify","payload":{"expression":"(1 + I)*(1 - I)"}},
+   "expected":{"ok":true,"certainty":"exact","result":"2"}}
+]

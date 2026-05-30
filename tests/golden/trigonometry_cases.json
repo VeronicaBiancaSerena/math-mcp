@@ -1,0 +1,6 @@
+[
+  {"tool":"trigonometry_compute","input":{"operation":"trig_identity_check","payload":{"left":"sin(2*x)","right":"2*sin(x)*cos(x)","variables":["x"]}},
+   "expected":{"ok":true,"status":"proved_by_symbolic_simplification","certainty":"proved","method":"symbolic","result_kind":"verification","result":"0"}},
+  {"tool":"trigonometry_compute","input":{"operation":"trig_simplify","payload":{"expression":"sin(x)**2 + cos(x)**2","variables":["x"]}},
+   "expected":{"ok":true,"certainty":"exact","result":"1"}}
+]

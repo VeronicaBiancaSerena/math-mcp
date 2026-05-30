@@ -1,0 +1,26 @@
+{
+  "description": "Operation benchmark matrix: each entry is timed by basic_latency.py.",
+  "operations": [
+    {"tool": "algebra_compute", "operation": "simplify_expression",
+     "payload": {"expression": "sin(x)**2 + cos(x)**2 - 1", "variables": ["x"]}},
+    {"tool": "algebra_compute", "operation": "solve_equation",
+     "payload": {"expression": "x**2 - 5*x + 6", "variable": "x"}},
+    {"tool": "calculus_compute", "operation": "differentiate",
+     "payload": {"expression": "sin(x)*x**2", "variable": "x"}},
+    {"tool": "calculus_compute", "operation": "numeric_evaluate",
+     "payload": {"expression": "pi*E", "precision_digits": 30}},
+    {"tool": "verification_compute", "operation": "check_identity",
+     "payload": {"left": "sin(x)**2 + cos(x)**2", "right": "1", "variables": ["x"]}},
+    {"tool": "matrix_compute", "operation": "det",
+     "payload": {"matrix": [["1", "2"], ["3", "4"]]}},
+    {"tool": "z3_compute", "operation": "z3_satisfiability",
+     "payload": {"variables": {"x": "Int"},
+                 "constraints": [{"op": "gt", "left": {"var": "x"}, "right": {"int": 5}}]}},
+    {"tool": "graph_compute", "operation": "shortest_path",
+     "payload": {"directed": false, "nodes": ["A", "B", "C"],
+                 "edges": [["A", "B"], ["B", "C"]], "source": "A", "target": "C"}},
+    {"tool": "discrete_compute", "operation": "solve_recurrence",
+     "payload": {"recurrence": "f(n) - f(n-1) - f(n-2)", "function": "f", "variable": "n",
+                 "initial_conditions": {"0": "0", "1": "1"}}}
+  ]
+}

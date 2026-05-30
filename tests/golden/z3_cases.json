@@ -1,0 +1,6 @@
+[
+  {"tool":"z3_compute","input":{"operation":"z3_satisfiability","payload":{"variables":{"x":"Int","y":"Int"},"constraints":[{"op":"gt","left":{"var":"x"},"right":{"int":0}},{"op":"eq","left":{"op":"add","args":[{"var":"x"},{"var":"y"}]},"right":{"int":10}}]}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","method":"backend","result_kind":"witness"}},
+  {"tool":"z3_compute","input":{"operation":"z3_satisfiability","payload":{"variables":{"x":"Int"},"constraints":[{"op":"gt","left":{"var":"x"},"right":{"int":0}},{"op":"lt","left":{"var":"x"},"right":{"int":0}}]}},
+   "expected":{"ok":true,"status":"proved_by_smt","certainty":"proved","method":"smt","result_kind":"verification"}}
+]

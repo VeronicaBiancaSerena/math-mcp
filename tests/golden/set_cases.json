@@ -1,0 +1,8 @@
+[
+  {"tool":"set_compute","input":{"operation":"set_identity_check","payload":{"left":"A & (B | C)","right":"(A & B) | (A & C)","variables":["A","B","C"]}},
+   "expected":{"ok":true,"status":"proved_by_symbolic_simplification","certainty":"proved","method":"symbolic","result_kind":"verification","result":{"identity_holds":true}}},
+  {"tool":"set_compute","input":{"operation":"set_operations","payload":{"kind":"union","a":["1","2"],"b":["2","3"]}},
+   "expected":{"ok":true,"certainty":"exact","result_kind":"object","result":["1","2","3"]}},
+  {"tool":"set_compute","input":{"operation":"set_relation_check","payload":{"a":["1","2"],"b":["1","2","3"],"relation":"subset"}},
+   "expected":{"ok":true,"certainty":"proved","result":{"relation":"subset","holds":true}}}
+]

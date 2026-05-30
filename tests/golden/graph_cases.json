@@ -1,0 +1,8 @@
+[
+  {"tool":"graph_compute","input":{"operation":"shortest_path","payload":{"directed":false,"nodes":["A","B","C"],"edges":[["A","B"],["B","C"]],"source":"A","target":"C"}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","result_kind":"object","result":{"path":["A","B","C"],"length":2,"reachable":true}}},
+  {"tool":"graph_compute","input":{"operation":"is_connected","payload":{"directed":false,"nodes":["A","B","C"],"edges":[["A","B"],["B","C"]]}},
+   "expected":{"ok":true,"result":{"connected":true}}},
+  {"tool":"graph_compute","input":{"operation":"has_cycle","payload":{"directed":false,"nodes":["A","B","C"],"edges":[["A","B"],["B","C"],["C","A"]]}},
+   "expected":{"ok":true,"result":{"has_cycle":true}}}
+]

@@ -1,0 +1,6 @@
+[
+  {"tool":"logic_compute","input":{"operation":"logic_equivalence_check","payload":{"left":"p >> q","right":"~p | q","variables":["p","q"]}},
+   "expected":{"ok":true,"status":"proved_by_symbolic_simplification","certainty":"proved","method":"symbolic","result_kind":"verification","result":{"equivalent":true}}},
+  {"tool":"logic_compute","input":{"operation":"logic_satisfiability","payload":{"expression":"p & ~p","variables":["p"]}},
+   "expected":{"ok":true,"status":"proved_by_finite_exhaustion","certainty":"proved","result":{"satisfiable":false}}}
+]

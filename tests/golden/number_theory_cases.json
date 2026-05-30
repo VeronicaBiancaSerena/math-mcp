@@ -1,0 +1,8 @@
+[
+  {"tool":"number_theory_compute","input":{"operation":"modular_arithmetic","payload":{"kind":"inverse","a":"17","modulus":"43"}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","result_kind":"value","result":38}},
+  {"tool":"number_theory_compute","input":{"operation":"chinese_remainder","payload":{"remainders":["2","3","2"],"moduli":["3","5","7"]}},
+   "expected":{"ok":true,"certainty":"exact","result":23}},
+  {"tool":"number_theory_compute","input":{"operation":"prime_analyze","payload":{"n":"97","query":"is_prime"}},
+   "expected":{"ok":true,"result":{"is_prime":true}}}
+]

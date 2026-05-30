@@ -1,0 +1,10 @@
+[
+  {"tool":"calculus_compute","input":{"operation":"differentiate","payload":{"expression":"x**3","variable":"x"}},
+   "expected":{"ok":true,"certainty":"exact","result":"3*x**2"}},
+  {"tool":"calculus_compute","input":{"operation":"series_expand","payload":{"expression":"exp(x)","variable":"x","point":"0","order":5}},
+   "expected":{"ok":true,"certainty":"exact","result_kind":"value","result":"1 + x + x**2/2 + x**3/6 + x**4/24 + x**5/120 + O(x**6)"}},
+  {"tool":"calculus_compute","input":{"operation":"integrate","payload":{"expression":"2*x","variable":"x","lower":"0","upper":"1"}},
+   "expected":{"ok":true,"certainty":"exact","result_kind":"value","result":"1"}},
+  {"tool":"calculus_compute","input":{"operation":"limit_expression","payload":{"expression":"sin(x)/x","variable":"x","point":"0"}},
+   "expected":{"ok":true,"certainty":"exact","result":"1"}}
+]

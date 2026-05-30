@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "math-mcp"
+version = "0.1.0"
+description = "Local offline MCP server for mathematical computation and verification."
+requires-python = ">=3.11"
+dependencies = [
+  "mcp[cli]>=1.25,<2",
+  "pydantic>=2",
+  "sympy",
+  "mpmath",
+  "numpy",
+  "scipy",
+  "networkx",
+  "z3-solver",
+]
+
+[project.scripts]
+math-mcp = "math_mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+  "slow: marks tests as slow",
+  "mcp: marks MCP protocol smoke tests",
+]
+filterwarnings = [
+  "ignore:bitcount function is deprecated:DeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_configs = true
+plugins = ["pydantic.mypy"]
+
+# Third-party scientific and protocol libraries ship without type stubs.
+# Treat them as untyped rather than failing the strict gate on missing stubs.
+[[tool.mypy.overrides]]
+module = [
+  "sympy.*",
+  "mpmath.*",
+  "scipy.*",
+  "networkx.*",
+  "z3.*",
+  "mcp.*",
+]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
