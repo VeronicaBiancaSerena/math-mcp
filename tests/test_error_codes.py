@@ -40,6 +40,12 @@ SCENARIOS: dict[str, tuple] = {
         {"expression": "x"},
         {"limits": {"timeout_ms": -1}},
     ),
+    "NUMERIC_CONVERGENCE_FAILED": (
+        "calculus_compute",
+        "numeric_optimize",
+        {"expression": "x", "variables": ["x"], "goal": "min"},
+        {},
+    ),
 }
 
 

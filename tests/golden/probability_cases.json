@@ -4,5 +4,7 @@
   {"tool":"probability_compute","input":{"operation":"event_probability","payload":{"mode":"uniform_finite","condition":"(a > 0) | (b > 0)","variables":["a","b"]},"domains":[{"variable":"a","kind":"finite","values":["0","1"]},{"variable":"b","kind":"finite","values":["0","1"]}]},
    "expected":{"ok":true,"certainty":"exact","result":"3/4"}},
   {"tool":"probability_compute","input":{"operation":"bayes_update","payload":{"prior":"1/2","likelihood":"1","false_likelihood":"0"}},
-   "expected":{"ok":true,"certainty":"exact","result":"1"}}
+   "expected":{"ok":true,"certainty":"exact","result":"1"}},
+  {"tool":"probability_compute","input":{"operation":"probability_simulation","payload":{"experiment":"coin","trials":2000,"target":"1"},"limits":{"seed":4242}},
+   "expected":{"ok":true,"status":"success","certainty":"evidence","method":"simulation","result_kind":"value"}}
 ]

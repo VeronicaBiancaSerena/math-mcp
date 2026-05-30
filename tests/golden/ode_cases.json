@@ -2,5 +2,7 @@
   {"tool":"ode_compute","input":{"operation":"ode_verify_solution","payload":{"solution":"C*exp(x)","variable":"x","residual":"dy - y","parameters":["C"]}},
    "expected":{"ok":true,"status":"proved_by_symbolic_simplification","certainty":"proved","method":"symbolic","result_kind":"verification","result":{"satisfies":true}}},
   {"tool":"ode_compute","input":{"operation":"ode_verify_solution","payload":{"solution":"x**2","variable":"x","residual":"dy - y"}},
-   "expected":{"ok":true,"status":"disproved_by_counterexample","certainty":"disproved"}}
+   "expected":{"ok":true,"status":"disproved_by_counterexample","certainty":"disproved"}},
+  {"tool":"ode_compute","input":{"operation":"ode_solve_numeric","payload":{"expression":"y","variable":"t","function":"y","t_span":["0","1"],"y0":["1"],"points":50}},
+   "expected":{"ok":true,"status":"success","certainty":"evidence","method":"numeric_sampling","result_kind":"object"}}
 ]

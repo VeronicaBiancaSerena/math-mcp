@@ -6,5 +6,7 @@
   {"tool":"calculus_compute","input":{"operation":"integrate","payload":{"expression":"2*x","variable":"x","lower":"0","upper":"1"}},
    "expected":{"ok":true,"certainty":"exact","result_kind":"value","result":"1"}},
   {"tool":"calculus_compute","input":{"operation":"limit_expression","payload":{"expression":"sin(x)/x","variable":"x","point":"0"}},
-   "expected":{"ok":true,"certainty":"exact","result":"1"}}
+   "expected":{"ok":true,"certainty":"exact","result":"1"}},
+  {"tool":"calculus_compute","input":{"operation":"numeric_optimize","payload":{"expression":"(x-3)**2 + 2","variables":["x"],"goal":"min"}},
+   "expected":{"ok":true,"status":"success","certainty":"evidence","method":"numeric_optimization","result_kind":"witness"}}
 ]
