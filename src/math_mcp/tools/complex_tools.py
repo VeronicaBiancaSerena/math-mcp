@@ -2,14 +2,47 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import sympy as sp
 
 from math_mcp.backends.sympy_backend import to_latex
 from math_mcp.errors import InvalidInput
 from math_mcp.parsing.sympy_parser import parse_expression, parse_symbol
 from math_mcp.runtime.serialization import to_text
-from math_mcp.tools.base import Ctx, Outcome, object_result, solution_set_result, value_result
+from math_mcp.tools.base import (
+    Ctx,
+    Outcome,
+    condition,
+    object_result,
+    solution_set_result,
+    value_result,
+)
 from math_mcp.tools.dispatch import handler
+
+# SymPy's ``arg`` returns the principal value in (-pi, pi]. This is a branch-cut
+# convention, so results that expose an argument must declare it as a structured branch
+# condition (guide §10.2/§11.1) and record the convention in metadata (guide §21).
+_ARG_BRANCH_AST: dict[str, Any] = {
+    "op": "and",
+    "args": [
+        {"op": "lt", "left": {"op": "neg", "arg": {"const": "pi"}}, "right": {"var": "arg"}},
+        {"op": "le", "left": {"var": "arg"}, "right": {"const": "pi"}},
+    ],
+}
+
+
+def _arg_branch_condition() -> dict[str, Any]:
+    return condition(
+        "-pi < arg <= pi",
+        condition_ast=_ARG_BRANCH_AST,
+        source="branch",
+        variables=["arg"],
+        description="argument uses SymPy's principal branch (-pi, pi]",
+    )
+
+
+_ARG_BRANCH_CONVENTIONS = {"arg": "principal value in (-pi, pi]"}
 
 
 @handler("complex_compute", "complex_simplify")
@@ -29,7 +62,13 @@ def complex_mod_arg(ctx: Ctx) -> Outcome:
         "real_part": to_text(sp.simplify(sp.re(expr))),
         "imag_part": to_text(sp.simplify(sp.im(expr))),
     }
-    return object_result(info, certainty="exact", method="symbolic")
+    return object_result(
+        info,
+        certainty="exact",
+        method="symbolic",
+        conditions=[_arg_branch_condition()],
+        metadata={"branch_conventions": _ARG_BRANCH_CONVENTIONS},
+    )
 
 
 @handler("complex_compute", "complex_to_polar")
@@ -39,7 +78,13 @@ def complex_to_polar(ctx: Ctx) -> Outcome:
         "modulus": to_text(sp.simplify(sp.Abs(expr))),
         "argument": to_text(sp.simplify(sp.arg(expr))),
     }
-    return object_result(info, certainty="exact", method="symbolic")
+    return object_result(
+        info,
+        certainty="exact",
+        method="symbolic",
+        conditions=[_arg_branch_condition()],
+        metadata={"branch_conventions": _ARG_BRANCH_CONVENTIONS},
+    )
 
 
 @handler("complex_compute", "complex_from_polar")

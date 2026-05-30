@@ -127,10 +127,12 @@ def _run_real(request: dict[str, Any]) -> dict[str, Any]:
 
 
 def main() -> None:
-    raw = sys.stdin.read()
+    raw = sys.stdin.buffer.read()
     try:
         request = json.loads(raw)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+        # Non-JSON / binary / pickled input is rejected structurally and never unpickled
+        # or executed (guide §15.3.1).
         _emit(
             {
                 "ok": False,

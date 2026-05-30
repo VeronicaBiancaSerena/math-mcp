@@ -89,10 +89,17 @@ def test_dangerous_tokens_rejected(tokens: list[str]) -> None:
 @given(
     st.lists(st.integers(min_value=0, max_value=20), min_size=0, max_size=6, unique=True),
     st.lists(st.integers(min_value=0, max_value=20), min_size=0, max_size=6, unique=True),
+    st.lists(st.integers(min_value=0, max_value=20), min_size=0, max_size=6, unique=True),
 )
-def test_set_algebra_laws(a: list[int], b: list[int]) -> None:
-    sa, sb = set(a), set(b)
+def test_set_algebra_laws(a: list[int], b: list[int], c: list[int]) -> None:
+    sa, sb, sc = set(a), set(b), set(c)
     # commutativity and idempotence of finite-set operations
     assert sa | sb == sb | sa
     assert sa & sb == sb & sa
     assert sa | sa == sa
+    # associativity (guide §15.4)
+    assert (sa | sb) | sc == sa | (sb | sc)
+    assert (sa & sb) & sc == sa & (sb & sc)
+    # distributivity (guide §15.4)
+    assert sa & (sb | sc) == (sa & sb) | (sa & sc)
+    assert sa | (sb & sc) == (sa | sb) & (sa | sc)

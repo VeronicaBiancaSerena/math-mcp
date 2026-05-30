@@ -46,6 +46,12 @@ SCENARIOS: dict[str, tuple] = {
         {"expression": "x", "variables": ["x"], "goal": "min"},
         {},
     ),
+    "OUTPUT_TOO_LARGE": (
+        "algebra_compute",
+        "expand_expression",
+        {"expression": "(x + 1)**40", "variables": ["x"]},
+        {"limits": {"max_output_chars": 256}},
+    ),
 }
 
 
@@ -84,6 +90,22 @@ def test_invalid_ast_rejected() -> None:
     )
     assert result.ok is False
     assert result.error_code == "INVALID_AST"
+
+
+def test_z3_sort_vs_domain_conflict() -> None:
+    # A Z3 variable declared as Int while a top-level domain says it is real is a
+    # payload-vs-domain conflict (guide §10.3); it must not reach the solver backend.
+    result = call(
+        "z3_compute",
+        "z3_satisfiability",
+        {"variables": {"x": "Int"}, "constraints": [{"op": "gt", "left": {"var": "x"},
+         "right": {"int": 0}}]},
+        domains=[{"variable": "x", "kind": "real"}],
+    )
+    assert result.ok is False
+    assert result.status == "invalid_input"
+    assert result.error_code == "CONSTRAINT_CONFLICT"
+    assert result.backend == "none"
 
 
 def test_platform_and_sandbox_codes_exist_in_vocabulary() -> None:

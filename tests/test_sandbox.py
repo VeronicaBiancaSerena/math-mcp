@@ -89,6 +89,28 @@ def test_stderr_does_not_leak_paths() -> None:
     assert "/home/" not in str(out)
 
 
+def test_worker_rejects_pickle_and_binary_stdin() -> None:
+    # The worker only json.loads its stdin; pickled/binary payloads must be rejected as a
+    # structured error and never unpickled (guide §15.3.1). This runs the worker directly,
+    # so it does not depend on a bubblewrap sandbox being available.
+    import json
+    import pickle
+    import subprocess
+    import sys
+
+    payload = pickle.dumps({"public_tool": "algebra_compute", "operation": "simplify_expression"})
+    proc = subprocess.run(
+        [sys.executable, "-I", "-m", "math_mcp.runtime.worker"],
+        input=payload,
+        capture_output=True,
+        timeout=30,
+    )
+    out = proc.stdout.decode("utf-8", errors="replace").strip()
+    obj = json.loads(out.splitlines()[-1])
+    assert obj["ok"] is False
+    assert obj["error"]["error_code"] == "PARSE_REJECTED"
+
+
 def test_non_linux_refuses(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MATH_MCP_FORCE_PLATFORM_UNSUPPORTED", "1")
     with pytest.raises(PlatformUnsupported):

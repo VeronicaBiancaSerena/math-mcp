@@ -22,6 +22,7 @@ from math_mcp.errors import (
     DomainUnsupported,
     InvalidInput,
     MathMcpError,
+    OutputTooLarge,
     UnsupportedOperation,
 )
 from math_mcp.operation_registry import OperationSpec, get_spec
@@ -209,6 +210,7 @@ def _assemble(
     ran_in_subprocess: bool,
 ) -> ToolResult:
     backend = outcome.backend if outcome.backend != "none" else spec.backend
+    _enforce_output_size(outcome.result, limits)
     has_override = "certainty_override_reason" in outcome.metadata_extra
     certainty, caveat_warnings, caveat_records = backend_caveats.enforce(
         backend, spec.operation, outcome.method, outcome.certainty, has_override=has_override
@@ -224,17 +226,13 @@ def _assemble(
         metadata["backend_caveats"] = caveat_records
     metadata.update(outcome.metadata_extra)
 
-    result, truncated = _enforce_output_size(outcome.result, limits)
-    if truncated:
-        warnings.append("result truncated to max_output_chars")
-
     return ToolResult(
         ok=True,
         status=outcome.status,
         certainty=certainty,
         method=outcome.method,
         result_kind=outcome.result_kind,
-        result=result,
+        result=outcome.result,
         result_latex=outcome.result_latex,
         conditions=outcome.conditions,  # type: ignore[arg-type]
         explanation=outcome.explanation,
@@ -248,10 +246,16 @@ def _assemble(
     )
 
 
-def _enforce_output_size(result: Any, limits: Limits) -> tuple[Any, bool]:
+def _enforce_output_size(result: Any, limits: Limits) -> None:
+    """Reject an over-limit result rather than silently truncating it (guide §10.1/§13).
+
+    A truncated value returned as ``ok=True`` would be silently wrong; the agent must see
+    a structured ``output_too_large`` / ``OUTPUT_TOO_LARGE`` error and shrink the request.
+    """
     if isinstance(result, str) and len(result) > limits.max_output_chars:
-        return result[: limits.max_output_chars], True
-    return result, False
+        raise OutputTooLarge(
+            f"result length {len(result)} exceeds max_output_chars={limits.max_output_chars}"
+        )
 
 
 def _trace(

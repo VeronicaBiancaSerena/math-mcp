@@ -72,6 +72,36 @@ def test_conditions_have_ast_when_structurable() -> None:
         assert "source" in cond.model_dump()
 
 
+def test_branch_condition_carries_structured_ast() -> None:
+    # A branch-cut condition (arg principal value) is structurable, so per guide §10.2/§11.1
+    # it must include a machine-readable condition_ast and be recorded in
+    # metadata["branch_conventions"] (guide §21); it stays exact, not downgraded.
+    result = call("complex_compute", "complex_mod_arg", {"expression": "1 + I"})
+    assert result.ok and result.certainty == "exact"
+    branch = [c for c in result.conditions if c.source == "branch"]
+    assert branch, "complex_mod_arg must declare the arg branch condition"
+    assert all(c.condition_ast is not None for c in branch)
+    assert "branch_conventions" in result.metadata
+
+
+def test_every_backend_caveat_is_referenced_by_an_operation() -> None:
+    # guide §15.9: each caveat in the registry must apply to at least one operation.
+    import fnmatch
+
+    for caveat in backend_caveats.CAVEATS:
+        referenced = any(
+            spec.backend == caveat.backend
+            and (
+                caveat.operation_pattern == "*"
+                or fnmatch.fnmatch(spec.operation, caveat.operation_pattern)
+            )
+            for spec in all_operations()
+        )
+        assert referenced, (
+            f"caveat {caveat.backend}:{caveat.operation_pattern} matches no operation"
+        )
+
+
 def test_caveat_downgrade_actually_lowers_certainty() -> None:
     # A numeric-method result with a scipy-optimize caveat must be pulled down to evidence,
     # not merely warned about.

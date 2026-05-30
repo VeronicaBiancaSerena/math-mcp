@@ -62,3 +62,5 @@ def test_eval_includes_negative_and_recovery_cases() -> None:
     assert "latex" in notes
     assert "sampling" in notes
     assert "unknown" in notes
+    # A conditional-solution recovery case must exist (guide §15.16).
+    assert "conditional" in notes

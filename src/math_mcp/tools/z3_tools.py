@@ -3,9 +3,18 @@
 from __future__ import annotations
 
 from math_mcp.backends.z3_backend import refute_claim, solve_constraints
-from math_mcp.errors import InvalidInput
+from math_mcp.errors import ConstraintConflict, InvalidInput
 from math_mcp.tools.base import Ctx, Outcome, certificate, verification_result
 from math_mcp.tools.dispatch import handler
+
+# Domain kinds each Z3 sort is consistent with. A top-level domain that contradicts the
+# declared sort (e.g. sort "Int" with domain kind "real") is a CONSTRAINT_CONFLICT — the
+# guide §10.3 lists this as a payload-vs-domain conflict that must not reach the backend.
+_SORT_COMPATIBLE_KINDS: dict[str, set[str]] = {
+    "Int": {"integer"},
+    "Real": {"real", "rational"},
+    "Bool": {"boolean"},
+}
 
 
 def _variables(ctx: Ctx) -> dict[str, str]:
@@ -15,9 +24,28 @@ def _variables(ctx: Ctx) -> dict[str, str]:
     return {str(k): str(v) for k, v in variables.items()}
 
 
+def _check_sort_domain_conflict(ctx: Ctx, variables: dict[str, str]) -> None:
+    """Reject a declared Z3 sort that contradicts a top-level domain kind (guide §10.3)."""
+    for name, sort in variables.items():
+        constraint = ctx.constraints.variables.get(name)
+        if constraint is None or constraint.kind is None:
+            continue
+        compatible = _SORT_COMPATIBLE_KINDS.get(sort)
+        if compatible is None:
+            continue  # unknown sort is rejected later by declare_variables
+        if constraint.kind == "finite":
+            continue  # finite values may be integer/real-valued; not a clear contradiction
+        if constraint.kind not in compatible:
+            raise ConstraintConflict(
+                f"Z3 variable '{name}' declared sort '{sort}' conflicts with "
+                f"top-level domain kind '{constraint.kind}'"
+            )
+
+
 @handler("z3_compute", "z3_satisfiability")
 def z3_satisfiability(ctx: Ctx) -> Outcome:
     variables = _variables(ctx)
+    _check_sort_domain_conflict(ctx, variables)
     constraints = ctx.require("constraints")
     if not isinstance(constraints, list):
         raise InvalidInput("'constraints' must be a list of AST nodes")
@@ -60,6 +88,7 @@ def z3_satisfiability(ctx: Ctx) -> Outcome:
 @handler("z3_compute", "z3_find_counterexample")
 def z3_find_counterexample(ctx: Ctx) -> Outcome:
     variables = _variables(ctx)
+    _check_sort_domain_conflict(ctx, variables)
     assumptions = ctx.get("assumptions", []) or []
     if not isinstance(assumptions, list):
         raise InvalidInput("'assumptions' must be a list of AST nodes")
