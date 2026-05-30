@@ -98,16 +98,22 @@ def test_payload_schema_has_no_operation_subfield() -> None:
 
 
 def test_experimental_hidden_by_default() -> None:
+    # All registry operations are currently implemented, so the guarantee is verified at
+    # the mechanism level: the visibility filter must hide experimental/disabled by default
+    # and reveal them only with the explicit flags (guide §15.8). This stays correct even
+    # when no experimental operation exists in the registry.
+    from math_mcp.tools.capabilities import _state_visible
+
+    assert _state_visible("implemented", False, False)
+    assert _state_visible("deprecated", False, False)
+    assert not _state_visible("experimental", False, False)
+    assert _state_visible("experimental", True, False)
+    assert not _state_visible("disabled", False, False)
+    assert _state_visible("disabled", False, True)
+    # And no experimental/disabled operation may leak into the default document.
     default = get_capabilities()
-    with_exp = get_capabilities(include_experimental=True)
-    default_ops = {
-        (t, o) for t, tool in default["public_tools"].items() for o in tool["operations"]
-    }
-    exp_ops = {(t, o) for t, tool in with_exp["public_tools"].items() for o in tool["operations"]}
-    assert exp_ops > default_ops  # strictly more when experimental included
-    # No experimental operation leaks into the default document.
     for spec in all_operations():
-        if spec.state == "experimental":
+        if spec.state in ("experimental", "disabled"):
             assert spec.operation not in default["public_tools"][spec.public_tool]["operations"]
 
 

@@ -4,5 +4,11 @@
   {"tool":"ode_compute","input":{"operation":"ode_verify_solution","payload":{"solution":"x**2","variable":"x","residual":"dy - y"}},
    "expected":{"ok":true,"status":"disproved_by_counterexample","certainty":"disproved"}},
   {"tool":"ode_compute","input":{"operation":"ode_solve_numeric","payload":{"expression":"y","variable":"t","function":"y","t_span":["0","1"],"y0":["1"],"points":50}},
-   "expected":{"ok":true,"status":"success","certainty":"evidence","method":"numeric_sampling","result_kind":"object"}}
+   "expected":{"ok":true,"status":"success","certainty":"evidence","method":"numeric_sampling","result_kind":"object"}},
+  {"tool":"ode_compute","input":{"operation":"ode_solve_symbolic","payload":{"equation":"dy - y","function":"y","variable":"x"}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","method":"symbolic","result_kind":"solution_set","result":"Eq(y(x), C1*exp(x))"}},
+  {"tool":"ode_compute","input":{"operation":"ode_initial_value_solve","payload":{"equation":"dy - y","function":"y","variable":"x","initial_conditions":{"0":"1"}}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","method":"symbolic","result_kind":"value","result":"Eq(y(x), exp(x))"}},
+  {"tool":"ode_compute","input":{"operation":"ode_classify","payload":{"equation":"dy - y","function":"y","variable":"x"}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","method":"symbolic","result_kind":"object"}}
 ]

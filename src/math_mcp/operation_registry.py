@@ -260,7 +260,7 @@ def _build_specs() -> list[OperationSpec]:  # noqa: C901 - a flat declarative ta
         _op(
             public_tool="algebra_compute",
             operation="groebner_basis",
-            state="experimental",
+            state="implemented",
             risk="high",
             runs_in_subprocess=True,
             complexity_class="exponential",
@@ -564,7 +564,7 @@ def _build_specs() -> list[OperationSpec]:  # noqa: C901 - a flat declarative ta
             public_tool="matrix_compute",
             operation="matrix_decomposition_numeric",
             backend="numpy",
-            state="experimental",
+            state="implemented",
             risk="high",
             runs_in_subprocess=True,
             numeric_only=True,
@@ -781,7 +781,7 @@ def _build_specs() -> list[OperationSpec]:  # noqa: C901 - a flat declarative ta
             public_tool="probability_compute",
             operation="distribution_moments",
             backend="sympy",
-            state="experimental",
+            state="implemented",
             complexity_class="polynomial",
             payload_schema=_obj(
                 ["distribution", "moment"],
@@ -811,7 +811,7 @@ def _build_specs() -> list[OperationSpec]:  # noqa: C901 - a flat declarative ta
             public_tool="probability_compute",
             operation="probability_distribution",
             backend="sympy",
-            state="experimental",
+            state="implemented",
             complexity_class="polynomial",
             payload_schema=_obj(
                 ["distribution", "query"],
@@ -843,7 +843,7 @@ def _build_specs() -> list[OperationSpec]:  # noqa: C901 - a flat declarative ta
             public_tool="probability_compute",
             operation="random_variable_transform",
             backend="sympy",
-            state="experimental",
+            state="implemented",
             complexity_class="solver_dependent",
             payload_schema=_obj(
                 ["expression", "variable"],
@@ -857,7 +857,7 @@ def _build_specs() -> list[OperationSpec]:  # noqa: C901 - a flat declarative ta
             public_tool="probability_compute",
             operation="markov_chain_analyze",
             backend="numpy",
-            state="experimental",
+            state="implemented",
             numeric_only=True,
             complexity_class="polynomial",
             result_kinds=["object"],
@@ -1138,7 +1138,7 @@ def _build_specs() -> list[OperationSpec]:  # noqa: C901 - a flat declarative ta
             public_tool="geometry_compute",
             operation="conic_analyze",
             backend="sympy",
-            state="experimental",
+            state="implemented",
             complexity_class="polynomial",
             result_kinds=["object"],
             payload_schema=_obj(
@@ -1444,7 +1444,7 @@ def _build_specs() -> list[OperationSpec]:  # noqa: C901 - a flat declarative ta
         _op(
             public_tool="ode_compute",
             operation="ode_solve_symbolic",
-            state="experimental",
+            state="implemented",
             risk="high",
             runs_in_subprocess=True,
             result_kinds=["solution_set"],
@@ -1459,7 +1459,7 @@ def _build_specs() -> list[OperationSpec]:  # noqa: C901 - a flat declarative ta
         _op(
             public_tool="ode_compute",
             operation="ode_classify",
-            state="experimental",
+            state="implemented",
             runs_in_subprocess=True,
             result_kinds=["object"],
             payload_schema=_obj(
@@ -1473,7 +1473,7 @@ def _build_specs() -> list[OperationSpec]:  # noqa: C901 - a flat declarative ta
         _op(
             public_tool="ode_compute",
             operation="ode_initial_value_solve",
-            state="experimental",
+            state="implemented",
             risk="high",
             runs_in_subprocess=True,
             result_kinds=["value", "solution_set"],

@@ -6,5 +6,13 @@
   {"tool":"probability_compute","input":{"operation":"bayes_update","payload":{"prior":"1/2","likelihood":"1","false_likelihood":"0"}},
    "expected":{"ok":true,"certainty":"exact","result":"1"}},
   {"tool":"probability_compute","input":{"operation":"probability_simulation","payload":{"experiment":"coin","trials":2000,"target":"1"},"limits":{"seed":4242}},
-   "expected":{"ok":true,"status":"success","certainty":"evidence","method":"simulation","result_kind":"value"}}
+   "expected":{"ok":true,"status":"success","certainty":"evidence","method":"simulation","result_kind":"value"}},
+  {"tool":"probability_compute","input":{"operation":"distribution_moments","payload":{"distribution":"binomial","params":{"n":"10","p":"1/2"},"moment":"mean"}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","method":"symbolic","result_kind":"value","result":"5"}},
+  {"tool":"probability_compute","input":{"operation":"probability_distribution","payload":{"distribution":"binomial","params":{"n":"10","p":"1/2"},"query":"pmf","at":"5"}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","method":"symbolic","result_kind":"value","result":"63/256"}},
+  {"tool":"probability_compute","input":{"operation":"random_variable_transform","payload":{"expression":"2*X + 1","variable":"X","transform":"mean"}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","method":"symbolic","result_kind":"value","result":"1"}},
+  {"tool":"probability_compute","input":{"operation":"markov_chain_analyze","payload":{"transition_matrix":[["1/2","1/2"],["1/3","2/3"]],"query":"stationary"}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","method":"backend","result_kind":"object"}}
 ]

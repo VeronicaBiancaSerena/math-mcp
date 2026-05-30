@@ -6,5 +6,7 @@
   {"tool":"algebra_compute","input":{"operation":"expand_expression","payload":{"expression":"(x + 1)**2","variables":["x"]}},
    "expected":{"ok":true,"result":"x**2 + 2*x + 1"}},
   {"tool":"algebra_compute","input":{"operation":"solve_equation","payload":{"expression":"x**2 - 5*x + 6","variable":"x"}},
-   "expected":{"ok":true,"status":"success","certainty":"exact","result_kind":"solution_set","result":["2","3"]}}
+   "expected":{"ok":true,"status":"success","certainty":"exact","result_kind":"solution_set","result":["2","3"]}},
+  {"tool":"algebra_compute","input":{"operation":"groebner_basis","payload":{"polynomials":["x**2 + y**2 - 1","x - y"],"variables":["x","y"]}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","method":"symbolic","result_kind":"object","result":["x - y","2*y**2 - 1"]}}
 ]

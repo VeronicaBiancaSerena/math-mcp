@@ -4,5 +4,7 @@
   {"tool":"matrix_compute","input":{"operation":"rank","payload":{"matrix":[["1","2"],["2","4"]]}},
    "expected":{"ok":true,"certainty":"exact","result":1}},
   {"tool":"matrix_compute","input":{"operation":"trace","payload":{"matrix":[["1","2"],["3","4"]]}},
-   "expected":{"ok":true,"certainty":"exact","result":"5"}}
+   "expected":{"ok":true,"certainty":"exact","result":"5"}},
+  {"tool":"matrix_compute","input":{"operation":"matrix_decomposition_numeric","payload":{"matrix":[["1","2"],["3","4"]],"kind":"svd"}},
+   "expected":{"ok":true,"status":"success","certainty":"exact","method":"backend","result_kind":"object"}}
 ]

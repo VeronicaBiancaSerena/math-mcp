@@ -30,3 +30,17 @@ def test_line_intersection() -> None:
         },
     )
     assert result.ok and result.result == [{"x": "1", "y": "1"}]
+
+
+@pytest.mark.parametrize(
+    "expr,kind",
+    [
+        ("x**2 + y**2 - 1", "circle"),
+        ("x**2/4 + y**2/9 - 1", "ellipse"),
+        ("y - x**2", "parabola"),
+        ("x**2 - y**2 - 1", "hyperbola"),
+    ],
+)
+def test_conic_classification(expr: str, kind: str) -> None:
+    r = call("geometry_compute", "conic_analyze", {"expression": expr, "variables": ["x", "y"]})
+    assert r.ok and r.result["type"] == kind

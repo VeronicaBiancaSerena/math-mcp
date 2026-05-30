@@ -1,0 +1,45 @@
+name: ci
+
+# Hard quality gate for math-mcp. The build fails if pytest (which includes
+# tests/test_ci_gate.py — the consolidated §10-conflict / §15-category / every-ErrorCode /
+# every-caveat guard), ruff, or mypy fail. Linux-only by design (guide §13).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # Login shell so the conda environment activates for every step.
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bubblewrap (sandbox acceptance tests)
+        # Best effort: if unprivileged user namespaces are unavailable on the runner the
+        # sandbox tests skip themselves (sandbox_available() == False); they never hard-fail CI.
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
+      - name: Set up conda env (math-mcp)
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          environment-file: environment.yml
+          activate-environment: math-mcp
+          auto-activate-base: false
+
+      - name: Install package (editable)
+        run: pip install -e .
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Type-check (mypy)
+        run: mypy src
+
+      - name: Tests (pytest, includes CI hard gate)
+        run: pytest -q

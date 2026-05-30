@@ -61,3 +61,22 @@ def test_det_is_multiplicative(a_rows, b_rows) -> None:
     det_b = _det_via_tool([list(r) for r in b_rows])
     det_ab = _det_via_tool([[int(v) for v in row] for row in product])
     assert det_ab == det_a * det_b
+
+
+def test_matrix_decomposition_reconstructs() -> None:
+    # Differential (guide §15.5): QR and SVD must reconstruct the original matrix.
+    import numpy as np
+
+    A = np.array([[1.0, 2.0], [3.0, 4.0]])
+    qr = call("matrix_compute", "matrix_decomposition_numeric",
+              {"matrix": [["1", "2"], ["3", "4"]], "kind": "qr"})
+    assert qr.ok
+    Q, R = np.array(qr.result["Q"]), np.array(qr.result["R"])
+    assert np.allclose(Q @ R, A, atol=1e-9)
+    svd = call("matrix_compute", "matrix_decomposition_numeric",
+               {"matrix": [["1", "2"], ["3", "4"]], "kind": "svd"})
+    assert svd.ok
+    U = np.array(svd.result["U"])
+    s = np.array(svd.result["singular_values"])
+    Vh = np.array(svd.result["Vh"])
+    assert np.allclose(U @ np.diag(s) @ Vh, A, atol=1e-9)

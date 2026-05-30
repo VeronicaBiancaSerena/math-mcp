@@ -89,6 +89,10 @@ mypy src
 - `tests/` covers schemas, capabilities, registry/conformance, per-domain operations,
   golden cases, security/fuzz, sandbox acceptance, timeouts, seed determinism, error
   codes, a real MCP stdio smoke test, benchmarks, and the agent eval set.
+- `tests/test_ci_gate.py` is the consolidated hard gate: every §10 conflict case yields
+  `CONSTRAINT_CONFLICT`, every required §15 test category is present, every `ErrorCode`
+  has a triggering sample, and every backend caveat is referenced by an operation.
+- `.github/workflows/ci.yml` runs `ruff` + `mypy` + `pytest` (including the gate) on push/PR.
 - `benchmarks/` records per-operation latency/output size; `evals/` checks agent tool
   selection and the proof-vs-evidence distinction.
 
