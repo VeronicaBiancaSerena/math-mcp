@@ -12,9 +12,9 @@
 | 项目 | 状态 |
 | --- | --- |
 | 公开 MCP tools | **18 个**（2 个 utility：`ping`、`math_capabilities`；16 个 compute 领域级工具） |
-| registry operations | **97 个**（`implemented` **97** / `experimental` 0；无 `disabled`/`deprecated`） |
-| operation 功能覆盖 | **97/97 全部可正常返回**（其中 `finite_enumeration`/`finite_quantifier_check` 需配合顶层 `domains`，属指南 §5.2 设计） |
-| 测试 | **396 passed**（初始 280；第一轮审计+solve_recurrence+Tier-C +37=317；第二轮审计 +6=323；全量晋级+CI 硬门禁 +73=396） |
+| registry operations | **99 个**（`implemented` **99** / `experimental` 0；无 `disabled`/`deprecated`；含 V1 新增 `check_identity_constrained`、`constrained_optimize`） |
+| operation 功能覆盖 | **99/99 全部可正常返回**（其中 `finite_enumeration`/`finite_quantifier_check` 需配合顶层 `domains`，属指南 §5.2 设计） |
+| 测试 | **421 passed**（初始 280；第一轮审计+solve_recurrence+Tier-C +37=317；第二轮审计 +6=323；全量晋级+CI 硬门禁 +73=396；V1 可发现性+约束 operation +25=421） |
 | `pytest` / `ruff check .` / `mypy src` | 三者全部通过（mypy：48 个源文件无问题） |
 | 运行平台 | Linux-only，conda 环境 `math-mcp`，Python 3.11.15 |
 | 后端版本 | sympy 1.14.0 / mpmath 1.4.1 / numpy 2.4.6 / scipy 1.17.1 / networkx 3.6.1 |
@@ -317,6 +317,21 @@ ode_classify、ode_initial_value_solve）经真实 bwrap worker（`network_isola
 `.github/workflows/ci.yml` 在 push/PR 上跑 `ruff check .` + `mypy src` + `pytest -q`（含上述门禁）；
 ubuntu runner 上 best-effort 安装 bubblewrap（不可用时 sandbox 测试自动 skip，不硬失败）。
 新增 ErrorCode / caveat / 删除测试类别而不补覆盖，都会让该门禁失败，尽早暴露下一处边界缺口。
+
+### 3.9 V1 可发现性与自纠正优化（落地 `V1.md` / 指南 §24）
+
+V1 不扩大数学能力边界，只降低 agent 选错 operation/传错 schema 的概率并让失败可恢复。本轮改动：
+
+| 项 | 实现 | 测试 |
+| --- | --- | --- |
+| operation alias | `operation_registry._ALIASES`（algebra/trigonometry）+ `resolve_alias`/`aliases_for_tool`/`suggest_operations`；导入期 `_validate_aliases()` 强校验。dispatcher 在 `get_spec` 后、子进程前解析 alias，规范名优先；成功结果 `metadata` 记 `requested_operation`/`operation_alias_resolved` | `test_v1_optimizations.py` alias 系列 |
+| 未知 operation 推荐 | `MathMcpError.extra_metadata` 承载 `suggested_operations`/`available_operations`/`suggestion_source`，dispatcher 合并入错误 `metadata`；优先级：alias 精确→difflib 模糊（含对 alias 直觉名）→关键词→available。未知名不进入后端（`backend="none"`） | `test_v1_optimizations.py` 推荐系列 |
+| capabilities summary | `get_capabilities(mode=...)` + `math_capabilities(mode=...)`；summary 只含 tool/operation 名/alias，full 追加顶层 `mode`、每 compute tool `aliases`，及需要 domain 的 op 的 `requires_domains`/`domain_schema`/`example_request`（仅非默认值输出，full 其余结构不变） | `test_v1_optimizations.py` summary 系列 |
+| finite_enumeration domain 提示 | `discrete._missing_domain_message`：缺 domain 给顶层 `domains` 示例；检测到 `payload.domains` 给迁移提示（不自动搬运）；registry 上 `finite_enumeration`/`finite_quantifier_check` 声明 `requires_domains`/`domain_schema`/`example_request` | `test_v1_optimizations.py` + `test_discrete.py` |
+| `check_identity_constrained` | 新增 `verification_compute` operation；`parameterized_symbolic`/`substitution_symbolic` 走符号证明，`constrained_sampling` 只采约束可行的确定性网格点（反例必为可行点），无可行点/无参数化 → `DOMAIN_UNSUPPORTED`（`constraint_mode="unsupported"`）。绝不退化为忽略约束的自由变量采样 | `test_verification.py` 约束系列 |
+| `constrained_optimize` | 新增 `calculus_compute` operation，`max_certainty="evidence"`；`symbolic_lagrange`（等式约束，sympy）/`numeric`（SciPy SLSQP，残差+收敛）。新增 `scipy:constrained_optimize` caveat | `test_calculus.py` 约束系列 |
+
+错误码策略：不支持的约束证明方式 V1 复用 `DOMAIN_UNSUPPORTED`（文案说明），不扩 `ErrorCode` enum，避免触动 CI 硬门禁的「每个 ErrorCode 必被触发」覆盖集。registry 由 97→**99** operation，测试 396→**421 passed**，`ruff`/`mypy` 仍全绿。
 
 ---
 

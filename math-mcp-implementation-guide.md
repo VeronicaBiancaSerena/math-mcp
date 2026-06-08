@@ -221,6 +221,8 @@ capabilities 暴露 `payload_schema` 的目的不是让 MCP 端完全替代 Pyda
 
 `math_capabilities["public_tools"]` 必须包含 4.0 中的全部公开 MCP tools。`ping` 和 `math_capabilities` 属于 utility tool，可以标记为 `kind="utility"` 且 `operations={}`；其他计算类 public tool 标记为 `kind="compute"` 并暴露 operation 清单。
 
+`math_capabilities` 还支持 `mode` 参数（默认 `"full"`）：`mode="summary"` 返回只含 tool、operation 名清单、alias 的轻量索引，用于低成本发现；full 模式在原结构上追加顶层 `mode` 字段、每个 compute tool 的 `aliases`，以及需要顶层 `domains` 的 operation 的 `requires_domains`/`domain_schema`/`example_request`。详见 §24。
+
 #### 4.0.1 operation 命名规范
 
 顶层 `operation` 必须是该 public tool 下的叶子能力名，`payload` 中不得再嵌套第二个 `operation` 字段。
@@ -1358,11 +1360,18 @@ class OperationSpec(BaseModel):
     deprecated: bool = False
     replacement: ReplacementSpec | None = None
     disabled_reason: str | None = None
+    # V1 可发现性字段（§24）：只为需要顶层 domains 的 operation 设置，capabilities full
+    # 模式仅在非默认值时输出，避免给无 domain 的 operation 增噪。
+    requires_domains: bool = False
+    domain_schema: dict[str, Any] | None = None
+    example_request: dict[str, Any] | None = None
 
     @property
     def proof_capable(self) -> bool:
         return bool(self.proof_modes)
 ```
+
+operation alias map 也维护在 `operation_registry.py`（`_ALIASES`），由 `resolve_alias`、`aliases_for_tool`、`suggest_operations` 共享，capabilities 与 dispatcher 读取同一份数据，详见 §24。
 
 registry 必须驱动：
 
@@ -2115,6 +2124,14 @@ minimum_spanning_tree
 ```
 
 对不适用操作返回 `unsupported`，例如无向图请求拓扑排序。
+
+### 14.6 `check_identity_constrained`
+
+V1 新增的约束恒等验证 operation（`verification_compute`）。语义分层与字段见 §24.6：参数化/代入走符号证明，无参数化时只在满足约束的确定性网格点上采样，绝不退化为忽略约束的自由变量采样。`metadata.constraint_mode` 记录所用模式。
+
+### 14.7 `constrained_optimize`
+
+V1 新增的约束优化 operation（`calculus_compute`），`max_certainty="evidence"`。`symbolic_lagrange` 处理等式约束并返回 Lagrange 候选临界点，`numeric` 用 SciPy 约束局部搜索并返回约束残差。详见 §24.7。
 
 ## 15. 测试要求
 
@@ -3124,3 +3141,177 @@ math-mcp 能稳定算、验、找反例，
 ```
 
 数学推理质量提升应来自更可靠的计算和验证，而不是把工具做成另一个不可审计的回答器。
+
+## 24. V1 可发现性与自纠正优化
+
+V1 不扩大数学能力边界，而是降低 agent 选错 operation、传错 schema 的概率，并让失败可低成本恢复。本节是 V1 的权威说明，与 `V1.md` 一致，落地代码以本节为准。前序章节（§4.0、§10.4、§14）中标注“见 §24”的位置由本节补全。
+
+### 24.1 目标
+
+1. 降低 operation 名称误用率：常见直觉名能被解析为规范名。
+2. 提高失败可恢复性：未知 operation 返回推荐修正；缺失/错位 domain 返回明确迁移提示。
+3. 降低能力发现成本：提供只列 tool、operation、alias 的 capabilities summary 模式。
+4. 明确有限枚举的 domain 写法：在 capabilities 中直接暴露顶层 `domains` 的 schema 与示例。
+5. 明确带约束验证/优化的能力边界：不把自由变量采样误报为约束下反例或证明。
+6. 严格向后兼容：规范 operation 名、默认 full capabilities 结构、`ToolResult` 主字段不变。
+
+### 24.2 operation alias
+
+per-tool alias map 维护在 `operation_registry.py` 的 `_ALIASES` 中，并由 `resolve_alias`、`aliases_for_tool`、`suggest_operations` 共享同一份数据。
+
+原则：
+
+- alias 只在单个 public tool 内解析，不做跨 tool 自动跳转。
+- 规范名永远优先：dispatcher 先用 `get_spec` 直查，未命中才查 alias，因此 alias 不替代规范名。
+- alias 必须无歧义且不得与同 tool 的真实 operation 名冲突；导入期 `_validate_aliases()` 强校验。
+- 成功调用时，`metadata.operation` 记录规范名，`metadata.requested_operation` 记录原始请求名，alias 命中时再加 `metadata.operation_alias_resolved=true`。
+- alias 解析在进入后端/子进程之前完成。
+
+V1 alias 清单：
+
+```text
+algebra_compute:
+  simplify->simplify_expression, expand->expand_expression, factor->factor_expression,
+  cancel->cancel_expression, together->together_expression, solve->solve_equation,
+  roots->polynomial_roots, groebner->groebner_basis
+trigonometry_compute:
+  simplify->trig_simplify, expand->trig_expand, reduce->trig_reduce, rewrite->trig_rewrite,
+  solve->solve_trig_equation, identity_check->trig_identity_check, check_identity->trig_identity_check
+```
+
+其他 tool 暂不批量加 alias，避免误导；V1 后按真实失败日志再扩展。
+
+### 24.3 capabilities summary mode
+
+`math_capabilities` 新增 `mode` 参数，默认 `"full"` 保持原结构（额外增加顶层 `mode` 字段和每个 compute tool 的 `aliases`，均为追加，不破坏原字段）。
+
+```python
+math_capabilities(
+    include_experimental: bool = False,
+    include_disabled: bool = False,
+    mode: str = "full",  # "summary" | "full"
+)
+```
+
+`mode="summary"` 返回轻量索引，只含 tool、operation 名清单、alias，不含 `payload_schema`、`default_limits`、example：
+
+```json
+{
+  "server": "math-mcp",
+  "schema_version": "1.0",
+  "capabilities_version": "1.0",
+  "mode": "summary",
+  "public_tools": {
+    "algebra_compute": {
+      "kind": "compute",
+      "operations": ["simplify_expression", "expand_expression", "..."],
+      "aliases": {"simplify": "simplify_expression", "solve": "solve_equation"}
+    }
+  }
+}
+```
+
+Agent 使用建议：不确定有哪些工具/operation 时先拉 `mode="summary"`；选定 operation 后再拉 `mode="full"` 看该 operation 的 schema 和 example。
+
+### 24.4 未知 operation 推荐
+
+未知 operation 仍返回 `ok=false`、`status="unsupported"`、`error_code="UNSUPPORTED_OPERATION"`，且不进入后端或子进程，但 `error` 文案与 `metadata` 增强为可自纠正反馈：
+
+```json
+{
+  "error": "unknown operation 'simlify' for tool 'algebra_compute'. Did you mean 'simplify_expression'?",
+  "metadata": {
+    "operation_state": "unknown",
+    "suggested_operations": ["simplify_expression"],
+    "available_operations": ["simplify_expression", "expand_expression", "..."],
+    "suggestion_source": "alias | close_match | keyword | null"
+  }
+}
+```
+
+推荐来源优先级（`suggest_operations`）：1) alias 精确匹配；2) 对 alias 直觉名与规范名做 `difflib` 模糊匹配（可纠正 `simlify`→`simplify`→`simplify_expression` 这类拼写错误）；3) 子串/关键词重叠；4) 无候选时只返回 `available_operations`（至多 20 个）。`suggested_operations` 至多 3 个。这些建议挂在异常的 `extra_metadata` 上，由 dispatcher 合并进错误结果的 `metadata`。
+
+### 24.5 finite_enumeration domain 提示
+
+`domains` 是 compute tool 的顶层参数，不属于 `payload`。需要顶层 domain 的 operation（`finite_enumeration`、`finite_quantifier_check`）在 registry 中通过三个可选字段声明，并在 capabilities full 模式暴露（不需要 domain 的 operation 不带这些字段）：
+
+```text
+requires_domains: true
+domain_schema: 顶层 domains 数组的 JSON Schema（finite 用 values，integer 用 lower/upper）
+example_request: 完整调用示例，domains 位于顶层而非 payload
+```
+
+错误提示增强（均为 `DOMAIN_UNSUPPORTED`）：
+
+- 缺少 domain：
+  `finite_enumeration requires a finite or bounded-integer domain for 'x'. Pass domains as a top-level argument, e.g. domains=[{"variable":"x","kind":"integer","lower":"0","upper":"3"}].`
+- 检测到 `payload.domains` 而顶层 `domains` 为空：
+  `finite_enumeration received domains inside payload, but domains must be a top-level argument. Move payload.domains to the tool argument named domains.`
+
+V1 决策：先返回明确错误，不自动搬运 `payload.domains`，避免掩盖客户端调用形状错误。
+
+### 24.6 check_identity_constrained
+
+新增 `verification_compute(operation="check_identity_constrained")`，在约束曲面上验证恒等式，禁止退化为忽略约束的自由变量网格采样。
+
+建议 payload：
+
+```json
+{
+  "left": "x**2/4 + y**2/3",
+  "right": "1",
+  "variables": ["x", "y"],
+  "constraints": [{"relation": "==", "left": "x**2/4 + y**2/3", "right": "1"}],
+  "parameterization": {"variables": ["t"], "substitutions": {"x": "2*cos(t)", "y": "sqrt(3)*sin(t)"}}
+}
+```
+
+语义分层，并在 `metadata.constraint_mode` 记录所用模式：
+
+1. `parameterized_symbolic`：先验证参数化满足等式约束，再把 substitutions 代入 `left-right` 化简；为 0 则 `proved_by_symbolic_simplification`。
+2. `substitution_symbolic`：payload 直接给出 `substitutions`（用约束消元），验证约束后代入化简，证明等级同上。
+3. `constrained_sampling`：无参数化/代入时，在确定性有理网格上只保留满足全部约束的点；其中出现不等点则 `disproved_by_counterexample`，未发现则 `numeric_evidence_only`（evidence）。反例必然是可行点，绝不是约束外的无关点。
+4. 无可行网格点（如等式约束几乎不会落在网格上）且无参数化/代入：返回 `unsupported`，并建议提供 `parameterization` 或 `substitutions`。
+
+错误码：不支持的约束证明方式 V1 复用 `DOMAIN_UNSUPPORTED`（文案说明是不支持该约束证明方式，`metadata.constraint_mode="unsupported"`），不新增 enum。证明 certificate 包含原始约束、所用 substitution/parameterization、约束满足性摘要、代入后的恒等式。
+
+### 24.7 constrained_optimize
+
+新增 `calculus_compute(operation="constrained_optimize")`，`max_certainty="evidence"`（不承诺全局最优证明）。
+
+建议 payload：
+
+```json
+{
+  "objective": "x**2 + y**2",
+  "variables": ["x", "y"],
+  "goal": "min",
+  "constraints": [{"relation": "==", "left": "x + y", "right": "1"}],
+  "method": "symbolic_lagrange"
+}
+```
+
+语义分层（`metadata.method_detail` 记录实际路径）：
+
+- `method="symbolic_lagrange"`：仅等式约束。求解 `∇f = Σλ∇g` 与 `g=0`，返回实候选临界点、目标值、候选清单；`certainty="evidence"`，`method="symbolic"`，backend `sympy`。
+- `method="numeric"`：SciPy SLSQP 约束局部搜索，返回最优点、目标值、每条约束残差、收敛信息与起点；`certainty="evidence"`，`method="numeric_optimization"`，backend `scipy`。
+- 未显式给出 `method` 时：全等式约束默认走 `symbolic_lagrange`，含不等式则走 `numeric`；`symbolic_lagrange` 收到不等式约束直接报 `invalid_input` 并建议改用 `numeric`。
+
+registry `backend="scipy"`，并新增 `scipy:constrained_optimize` 的 backend caveat（`affects_certainty=true`，`recommended_certainty="evidence"`）；symbolic 路径运行时 backend 返回 `sympy`，数值路径返回 `scipy`。V1 不承诺任意多约束全局优化证明。
+
+### 24.8 V1 验收清单
+
+- `algebra_compute(operation="simplify", ...)` 成功，`metadata.operation="simplify_expression"`、`requested_operation="simplify"`、`operation_alias_resolved=true`。
+- `trigonometry_compute(operation="simplify", ...)` 成功，`metadata.operation="trig_simplify"`。
+- `algebra_compute(operation="simlify", ...)` 返回 `UNSUPPORTED_OPERATION`，`metadata.suggested_operations=["simplify_expression"]`，且 `backend="none"`。
+- `math_capabilities()` 默认仍返回 full；`math_capabilities(mode="summary")` 只返回 tool、operation、alias，不含 `payload_schema`、`default_limits`。
+- `discrete_compute(finite_enumeration)` 的 capabilities 能看到完整 `example_request`，其中 `domains` 位于顶层。
+- 把 `domains` 放进 `payload` 时返回明确迁移提示。
+- 椭圆约束下的恒等验证使用参数化/代入，或明确返回 evidence/unsupported；不得按自由变量给无关反例。
+- 未知 operation 与 alias 解析路径不进入后端或 sandbox 子进程。
+
+### 24.9 非目标
+
+- 不把 math-mcp 做成自然语言数学求解器，不支持 LaTeX 直接输入。
+- 不承诺任意代数簇上的全局恒等证明，不用数值采样冒充证明。
+- 不破坏已有规范 operation 名和 full capabilities 结构。

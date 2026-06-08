@@ -41,6 +41,12 @@ server routing, and the tests. Operations enter as `experimental` and are promot
 `implemented` only after passing the quality gates; experimental/disabled operations are
 hidden from the default capabilities document.
 
+**Discoverability aids (guide §24):** common intuitive names are resolved as per-tool
+aliases (e.g. `algebra_compute(operation="simplify")` → `simplify_expression`); an unknown
+operation returns `suggested_operations`/`available_operations` without reaching a backend;
+and `math_capabilities(mode="summary")` returns a lightweight index of tool names,
+operation names, and aliases for cheap discovery before requesting the full schema.
+
 ## Result envelope
 
 Every compute tool returns a `ToolResult` with `status`, `certainty`

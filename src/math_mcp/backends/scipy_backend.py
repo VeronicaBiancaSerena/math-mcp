@@ -35,6 +35,59 @@ def optimize_expression(
     }
 
 
+def optimize_constrained(
+    expr: Any,
+    variables: list[str],
+    goal: str,
+    constraints: list[dict[str, Any]],
+    start: list[float] | None,
+) -> dict[str, Any]:
+    """Numerically optimize ``expr`` subject to equality/inequality constraints (evidence).
+
+    Each constraint is ``{"relation", "left", "right"}`` with SymPy expressions; it is
+    turned into the SciPy form (equality ``g == 0`` or inequality ``g >= 0``). The result
+    reports the optimum, objective value, per-constraint residuals, and convergence — it
+    is a numeric local search, never a proof of global optimality.
+    """
+    import numpy as np  # noqa: PLC0415
+    from scipy.optimize import minimize  # noqa: PLC0415
+
+    symbols = [sp.Symbol(v) for v in variables]
+    obj = sp.lambdify(symbols, expr, modules="numpy")
+    sign = -1.0 if goal == "max" else 1.0
+
+    def objective(point: Any) -> float:
+        return float(sign * obj(*point))
+
+    scipy_cons = []
+    residual_funcs: list[tuple[str, Any]] = []
+    for c in constraints:
+        relation = c["relation"]
+        g = sp.lambdify(symbols, c["left"] - c["right"], modules="numpy")
+        residual_funcs.append((relation, g))
+        if relation == "==":
+            scipy_cons.append({"type": "eq", "fun": (lambda p, g=g: float(g(*p)))})
+        elif relation in (">=", ">"):
+            scipy_cons.append({"type": "ineq", "fun": (lambda p, g=g: float(g(*p)))})
+        elif relation in ("<=", "<"):
+            scipy_cons.append({"type": "ineq", "fun": (lambda p, g=g: float(-g(*p)))})
+        else:
+            raise ValueError(f"unsupported constraint relation '{relation}'")
+
+    x0 = np.array(start, dtype=float) if start else np.zeros(len(variables))
+    result = minimize(objective, x0, method="SLSQP", constraints=scipy_cons)
+    point = {v: float(x) for v, x in zip(variables, result.x, strict=False)}
+    residuals = [{"relation": rel, "residual": float(g(*result.x))} for rel, g in residual_funcs]
+    return {
+        "converged": bool(result.success),
+        "point": point,
+        "value": float(sign * result.fun),
+        "constraint_residuals": residuals,
+        "iterations": int(result.nit),
+        "start": x0.tolist(),
+    }
+
+
 def solve_ode_numeric(
     rhs_expr: Any,
     t_var: str,

@@ -14,7 +14,9 @@ class MathMcpError(Exception):
     """Base class for structured, agent-recoverable tool errors.
 
     Attributes mirror the fields the dispatcher needs to build a ToolResult:
-    ``status``, ``error_code``, ``certainty`` and ``method``.
+    ``status``, ``error_code``, ``certainty`` and ``method``. ``extra_metadata`` carries
+    optional structured hints (e.g. ``suggested_operations``) that the dispatcher merges
+    into ``ToolResult.metadata`` so a failed call stays self-correcting (V1 §6).
     """
 
     status: Status = "failure"
@@ -25,6 +27,7 @@ class MathMcpError(Exception):
     def __init__(self, message: str) -> None:
         super().__init__(message)
         self.message = message
+        self.extra_metadata: dict[str, object] = {}
 
 
 class ParseRejected(MathMcpError):

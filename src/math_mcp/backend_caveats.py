@@ -64,6 +64,16 @@ CAVEATS: list[BackendCaveat] = [
         recommended_certainty="evidence",
     ),
     BackendCaveat(
+        backend="scipy",
+        operation_pattern="constrained_optimize",
+        caveat=(
+            "Constrained optimization returns Lagrange candidates or a numeric local "
+            "optimum; without a global certificate the result is evidence, not a proof."
+        ),
+        affects_certainty=True,
+        recommended_certainty="evidence",
+    ),
+    BackendCaveat(
         backend="networkx",
         operation_pattern="*",
         caveat=(

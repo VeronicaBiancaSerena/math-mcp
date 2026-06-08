@@ -25,7 +25,13 @@ from math_mcp.errors import (
     OutputTooLarge,
     UnsupportedOperation,
 )
-from math_mcp.operation_registry import OperationSpec, get_spec
+from math_mcp.operation_registry import (
+    OperationSpec,
+    get_spec,
+    resolve_alias,
+    suggest_operations,
+    visible_operations_for_tool,
+)
 from math_mcp.parsing.domain_parser import NormalizedConstraints, normalize
 from math_mcp.runtime.limits import normalize_limits
 from math_mcp.runtime.subprocess_runner import run_in_subprocess
@@ -97,6 +103,41 @@ def execute_handler(
     return fn(Ctx(public_tool, operation, payload, limits, constraints, spec))
 
 
+def _resolve_operation(public_tool: str, operation: str) -> tuple[OperationSpec, str, str, bool]:
+    """Resolve an operation name, honoring aliases, or raise a suggestion-bearing error.
+
+    Returns ``(spec, canonical_operation, requested_operation, alias_resolved)``. A real
+    operation name always wins; the per-tool alias map is consulted only on a direct miss
+    (V1 §5). Unknown names never reach a backend or sandbox subprocess — they raise
+    ``UNSUPPORTED_OPERATION`` carrying structured ``suggested_operations`` /
+    ``available_operations`` hints in ``extra_metadata`` (V1 §6).
+    """
+    spec = get_spec(public_tool, operation)
+    canonical = operation
+    alias_resolved = False
+    if spec is None:
+        aliased = resolve_alias(public_tool, operation)
+        if aliased is not None:
+            candidate = get_spec(public_tool, aliased)
+            if candidate is not None:
+                spec, canonical, alias_resolved = candidate, aliased, True
+    if spec is None:
+        suggestions, source = suggest_operations(public_tool, operation)
+        available = [s.operation for s in visible_operations_for_tool(public_tool)][:20]
+        message = f"unknown operation '{operation}' for tool '{public_tool}'."
+        if suggestions:
+            message += " Did you mean " + " or ".join(f"'{s}'" for s in suggestions) + "?"
+        exc = UnsupportedOperation(message)
+        exc.extra_metadata = {
+            "operation_state": "unknown",
+            "suggested_operations": suggestions,
+            "available_operations": available,
+            "suggestion_source": source,
+        }
+        raise exc
+    return spec, canonical, operation, alias_resolved
+
+
 def run_operation(
     public_tool: str,
     operation: str,
@@ -114,12 +155,12 @@ def run_operation(
         domain_specs = _coerce_domains(domains)
         assumption_specs = _coerce_assumptions(assumptions)
 
-        spec = get_spec(public_tool, operation)
-        if spec is None:
-            raise UnsupportedOperation(f"unknown operation '{operation}' for tool '{public_tool}'")
+        spec, op_canonical, requested_op, alias_resolved = _resolve_operation(
+            public_tool, operation
+        )
         if spec.state == "disabled":
             reason = spec.disabled_reason or "operation is disabled"
-            raise UnsupportedOperation(f"operation '{operation}' is disabled: {reason}")
+            raise UnsupportedOperation(f"operation '{op_canonical}' is disabled: {reason}")
 
         constraints = normalize(domain_specs, assumption_specs, limits=norm_limits)
 
@@ -128,7 +169,7 @@ def run_operation(
         if ran_in_subprocess:
             raw = run_in_subprocess(
                 public_tool,
-                operation,
+                op_canonical,
                 payload_dict,
                 norm_limits,
                 [d.model_dump() for d in domain_specs],
@@ -138,12 +179,12 @@ def run_operation(
             outcome = _outcome_from_raw(raw)
         else:
             outcome = execute_handler(
-                public_tool, operation, payload_dict, norm_limits, constraints
+                public_tool, op_canonical, payload_dict, norm_limits, constraints
             )
 
         return _assemble(
             spec, outcome, norm_limits, requested_limits, watch, network_isolated,
-            ran_in_subprocess,
+            ran_in_subprocess, requested_op, alias_resolved,
         )
     except MathMcpError as exc:
         return _error_result(exc, public_tool, operation, watch, requested_limits)
@@ -208,6 +249,8 @@ def _assemble(
     watch: Stopwatch,
     network_isolated: bool | None,
     ran_in_subprocess: bool,
+    requested_operation: str,
+    alias_resolved: bool,
 ) -> ToolResult:
     backend = outcome.backend if outcome.backend != "none" else spec.backend
     _enforce_output_size(outcome.result, limits)
@@ -221,7 +264,10 @@ def _assemble(
         if w not in warnings:
             warnings.append(w)
 
-    metadata = _trace(spec, outcome, limits, requested_limits, network_isolated, ran_in_subprocess)
+    metadata = _trace(
+        spec, outcome, limits, requested_limits, network_isolated, ran_in_subprocess,
+        requested_operation, alias_resolved,
+    )
     if caveat_records:
         metadata["backend_caveats"] = caveat_records
     metadata.update(outcome.metadata_extra)
@@ -265,6 +311,8 @@ def _trace(
     requested_limits: dict[str, Any],
     network_isolated: bool | None,
     ran_in_subprocess: bool,
+    requested_operation: str,
+    alias_resolved: bool,
 ) -> dict[str, Any]:
     applied: dict[str, Any] = {
         "timeout_ms": limits.timeout_ms,
@@ -279,6 +327,7 @@ def _trace(
     trace: dict[str, Any] = {
         "public_tool": spec.public_tool,
         "operation": spec.operation,
+        "requested_operation": requested_operation,
         "operation_version": spec.operation_version,
         "operation_state": spec.state,
         "backend_versions": backend_versions(
@@ -293,6 +342,8 @@ def _trace(
         "seed": limits.seed,
         "debug_trace_enabled": debug_trace_enabled(),
     }
+    if alias_resolved:
+        trace["operation_alias_resolved"] = True
     return trace
 
 
@@ -311,6 +362,9 @@ def _error_result(
         "limits_requested": requested_limits,
         "debug_trace_enabled": debug_trace_enabled(),
     }
+    # Structured, self-correcting hints (e.g. suggested_operations) ride along on the
+    # exception so the agent can recover without a second discovery call (V1 §6).
+    metadata.update(getattr(exc, "extra_metadata", {}) or {})
     return ToolResult(
         ok=False,
         status=exc.status,

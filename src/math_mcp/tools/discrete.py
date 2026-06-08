@@ -128,10 +128,28 @@ def _finite_domains(ctx: Ctx, names: list[str]) -> dict[str, list[Any]]:
             lo, hi = int(constraint.lower), int(constraint.upper)
             domains[name] = [sp.Integer(v) for v in range(lo, hi + 1)]
         else:
-            raise DomainUnsupported(
-                f"finite_enumeration requires a finite or bounded-integer domain for '{name}'"
-            )
+            raise DomainUnsupported(_missing_domain_message(ctx, name))
     return domains
+
+
+def _missing_domain_message(ctx: Ctx, name: str) -> str:
+    """Explain how to supply the required top-level ``domains`` for finite enumeration.
+
+    A common mistake is putting ``domains`` inside ``payload``; ``domains`` is a top-level
+    tool argument (guide §5.2). When that misplacement is detected, point at it directly
+    rather than emitting the generic message (V1 §7.3). The field is not auto-moved: doing
+    so would mask a malformed call shape.
+    """
+    if ctx.payload.get("domains") and not ctx.constraints.has_explicit_domains:
+        return (
+            "finite_enumeration received domains inside payload, but domains must be a "
+            "top-level argument. Move payload.domains to the tool argument named domains."
+        )
+    return (
+        f"finite_enumeration requires a finite or bounded-integer domain for '{name}'. "
+        "Pass domains as a top-level argument, e.g. "
+        'domains=[{"variable":"' + name + '","kind":"integer","lower":"0","upper":"3"}].'
+    )
 
 
 @handler("discrete_compute", "solve_recurrence")

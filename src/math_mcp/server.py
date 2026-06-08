@@ -31,16 +31,22 @@ def ping() -> dict[str, str]:
 def math_capabilities(
     include_experimental: bool = False,
     include_disabled: bool = False,
+    mode: str = "full",
 ) -> dict[str, Any]:
     """Return supported math domains, operations, input limits, and examples.
 
-    Default output lists only implemented (and still-callable deprecated) operations.
+    Default output (mode="full") lists only implemented (and still-callable deprecated)
+    operations with their full payload schema and examples. Use mode="summary" for a
+    lightweight index of tool names, operation names, and aliases — ideal for cheap
+    discovery before requesting the full schema of the operation you pick.
+
     Set include_experimental=true to discover experimental operations (not recommended
     for default agent use) and include_disabled=true to discover disabled ones.
     """
     return get_capabilities(
         include_experimental=include_experimental,
         include_disabled=include_disabled,
+        mode=mode,
     )
 
 

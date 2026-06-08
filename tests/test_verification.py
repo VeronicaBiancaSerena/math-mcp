@@ -72,3 +72,100 @@ def test_missing_variables_rejected() -> None:
         {"left": "x", "relation": ">", "right": "0"},
     )
     assert result.ok is False
+
+
+# --- check_identity_constrained (guide §8/§24) -----------------------------
+
+
+def test_constrained_identity_proved_by_parameterization() -> None:
+    # On the ellipse x^2/4 + y^2/3 = 1, the parameterization x=2cos t, y=√3 sin t makes
+    # the identity reduce to 0 — a genuine symbolic proof on the constraint surface.
+    result = call(
+        "verification_compute",
+        "check_identity_constrained",
+        {
+            "left": "x**2/4 + y**2/3",
+            "right": "1",
+            "variables": ["x", "y"],
+            "constraints": [{"relation": "==", "left": "x**2/4 + y**2/3", "right": "1"}],
+            "parameterization": {
+                "variables": ["t"],
+                "substitutions": {"x": "2*cos(t)", "y": "sqrt(3)*sin(t)"},
+            },
+        },
+    )
+    assert result.ok and result.status == "proved_by_symbolic_simplification"
+    assert result.certainty == "proved"
+    assert result.metadata["constraint_mode"] == "parameterized_symbolic"
+    assert result.certificate is not None
+
+
+def test_constrained_identity_proved_by_substitution() -> None:
+    result = call(
+        "verification_compute",
+        "check_identity_constrained",
+        {
+            "left": "x + y",
+            "right": "1",
+            "variables": ["x", "y"],
+            "constraints": [{"relation": "==", "left": "x + y", "right": "1"}],
+            "substitutions": {"y": "1 - x"},
+        },
+    )
+    assert result.ok and result.certainty == "proved"
+    assert result.metadata["constraint_mode"] == "substitution_symbolic"
+
+
+def test_constrained_identity_bad_parameterization_is_unsupported() -> None:
+    # A parameterization that does NOT satisfy the constraint must be rejected, not trusted.
+    result = call(
+        "verification_compute",
+        "check_identity_constrained",
+        {
+            "left": "x",
+            "right": "1",
+            "variables": ["x", "y"],
+            "constraints": [{"relation": "==", "left": "x + y", "right": "1"}],
+            "substitutions": {"y": "2 - x"},
+        },
+    )
+    assert result.ok is False
+    assert result.error_code == "DOMAIN_UNSUPPORTED"
+    assert result.metadata.get("constraint_mode") == "unsupported"
+
+
+def test_constrained_sampling_finds_feasible_counterexample() -> None:
+    # left=x, right=2 on 0<=x<=1: feasible grid points exist and none equals 2 -> disproved
+    # by a constraint-satisfying point (never a free-variable point outside the region).
+    result = call(
+        "verification_compute",
+        "check_identity_constrained",
+        {
+            "left": "x",
+            "right": "2",
+            "variables": ["x"],
+            "constraints": [
+                {"relation": ">=", "left": "x", "right": "0"},
+                {"relation": "<=", "left": "x", "right": "1"},
+            ],
+        },
+    )
+    assert result.ok and result.certainty == "disproved"
+    assert result.metadata["constraint_mode"] == "constrained_sampling"
+    assert result.metadata["feasible_samples"] >= 1
+
+
+def test_constrained_sampling_no_counterexample_is_evidence() -> None:
+    result = call(
+        "verification_compute",
+        "check_identity_constrained",
+        {
+            "left": "x",
+            "right": "x",
+            "variables": ["x"],
+            "constraints": [{"relation": ">=", "left": "x", "right": "0"}],
+        },
+    )
+    assert result.ok and result.status == "numeric_evidence_only"
+    assert result.certainty == "evidence"
+    assert "numeric sampling is not proof" in result.warnings

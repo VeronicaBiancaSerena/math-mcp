@@ -10,7 +10,7 @@ from math_mcp.backends.sympy_backend import to_latex
 from math_mcp.errors import BackendInternalError, InvalidInput
 from math_mcp.parsing.sympy_parser import parse_expression, parse_symbol
 from math_mcp.runtime.serialization import to_text
-from math_mcp.tools.base import Ctx, Outcome, condition, value_result
+from math_mcp.tools.base import Ctx, Outcome, condition, object_result, value_result
 from math_mcp.tools.dispatch import handler
 
 
@@ -141,4 +141,145 @@ def numeric_optimize(ctx: Ctx) -> Outcome:
         backend="scipy",
         result_kind="witness",
         warnings=["numeric local optimization is evidence, not a proof"],
+    )
+
+
+def _optimize_constraints(ctx: Ctx, allowed: set[str]) -> list[dict[str, Any]]:
+    raw = ctx.require("constraints")
+    if not isinstance(raw, list) or not raw:
+        raise InvalidInput("'constraints' must be a non-empty list of relation objects")
+    out: list[dict[str, Any]] = []
+    for c in raw:
+        if not isinstance(c, dict):
+            raise InvalidInput("each constraint must be an object with relation/left/right")
+        out.append(
+            {
+                "relation": str(c.get("relation", "==")),
+                "left": parse_expression(
+                    str(c["left"]), limits=ctx.limits, allowed_symbols=allowed
+                ),
+                "right": parse_expression(
+                    str(c.get("right", "0")), limits=ctx.limits, allowed_symbols=allowed
+                ),
+            }
+        )
+    return out
+
+
+@handler("calculus_compute", "constrained_optimize")
+def constrained_optimize(ctx: Ctx) -> Outcome:
+    """Optimize an objective subject to constraints (V1 §9/§24).
+
+    Two honest paths, both capped at ``certainty="evidence"`` (we do not prove global
+    optimality): ``symbolic_lagrange`` returns the Lagrange critical points for equality
+    constraints; ``numeric`` runs a SciPy constrained local search with reported residuals.
+    """
+    variables = ctx.require("variables")
+    if not isinstance(variables, list) or not variables:
+        raise InvalidInput("'variables' must be a non-empty list")
+    names = [str(v) for v in variables]
+    allowed = set(names)
+    objective = parse_expression(
+        ctx.require_str("objective"), limits=ctx.limits, allowed_symbols=allowed
+    )
+    goal = str(ctx.get("goal", "min"))
+    if goal not in ("min", "max"):
+        raise InvalidInput("goal must be 'min' or 'max'")
+    constraints = _optimize_constraints(ctx, allowed)
+
+    all_equality = all(c["relation"] == "==" for c in constraints)
+    method = str(ctx.get("method") or ("symbolic_lagrange" if all_equality else "numeric"))
+    if method == "symbolic_lagrange":
+        return _lagrange_optimize(ctx, objective, names, goal, constraints)
+    if method == "numeric":
+        return _numeric_constrained(ctx, objective, names, goal, constraints)
+    raise InvalidInput("method must be 'symbolic_lagrange' or 'numeric'")
+
+
+def _lagrange_optimize(
+    ctx: Ctx, objective: Any, names: list[str], goal: str, constraints: list[dict[str, Any]]
+) -> Outcome:
+    if any(c["relation"] != "==" for c in constraints):
+        raise InvalidInput(
+            "symbolic_lagrange supports equality constraints only; use method='numeric' "
+            "for inequality constraints"
+        )
+    syms = [parse_symbol(n) for n in names]
+    gs = [c["left"] - c["right"] for c in constraints]
+    lambdas = list(sp.symbols(f"_lam0:{len(gs)}"))
+    lagrangian = objective - sum(lam * g for lam, g in zip(lambdas, gs, strict=True))
+    equations = [sp.diff(lagrangian, s) for s in syms] + gs
+    solutions = sp.solve(equations, [*syms, *lambdas], dict=True)
+
+    candidates: list[dict[str, Any]] = []
+    for sol in solutions:
+        if any(not sol.get(s, sp.Symbol("u")).is_real for s in syms):
+            continue
+        point = {str(s): to_text(sol[s]) for s in syms if s in sol}
+        if len(point) != len(syms):
+            continue
+        value = sp.simplify(objective.subs({s: sol[s] for s in syms}))
+        if not value.is_real:
+            continue
+        candidates.append({"point": point, "value": to_text(value), "_value": value})
+
+    if not candidates:
+        return Outcome(
+            status="unknown",
+            certainty="unknown",
+            method="none",
+            result_kind="none",
+            result=None,
+            backend="sympy",
+            explanation="No real Lagrange critical point was found for these constraints.",
+            warnings=["no closed-form constrained optimum found"],
+            metadata_extra={"method_detail": "symbolic_lagrange"},
+        )
+
+    best = (max if goal == "max" else min)(candidates, key=lambda c: c["_value"])
+    for c in candidates:
+        c.pop("_value", None)
+    best.pop("_value", None)
+    result = {
+        "goal": goal,
+        "optimum": best["point"],
+        "value": best["value"],
+        "candidates": candidates,
+        "constraints": [f"{to_text(c['left'])} == {to_text(c['right'])}" for c in constraints],
+    }
+    return object_result(
+        result,
+        certainty="evidence",
+        method="symbolic",
+        backend="sympy",
+        warnings=[
+            "Lagrange critical points are candidate extrema; global optimality is not proved"
+        ],
+        metadata={"method_detail": "symbolic_lagrange"},
+    )
+
+
+def _numeric_constrained(
+    ctx: Ctx, objective: Any, names: list[str], goal: str, constraints: list[dict[str, Any]]
+) -> Outcome:
+    from math_mcp.backends.scipy_backend import optimize_constrained
+
+    start_raw = ctx.get("start")
+    start = (
+        [float(parse_expression(str(s), limits=ctx.limits)) for s in start_raw]
+        if isinstance(start_raw, list)
+        else None
+    )
+    result = optimize_constrained(objective, names, goal, constraints, start)
+    if not result["converged"]:
+        from math_mcp.errors import NumericConvergenceFailed
+
+        raise NumericConvergenceFailed("constrained numeric optimization did not converge")
+    return object_result(
+        result,
+        certainty="evidence",
+        method="numeric_optimization",
+        backend="scipy",
+        warnings=["numeric constrained optimization is evidence, not a proof"],
+        metadata={"method_detail": "numeric"},
     )

@@ -114,6 +114,12 @@ class OperationSpec(BaseModel):
     deprecated: bool = False
     replacement: ReplacementSpec | None = None
     disabled_reason: str | None = None
+    # V1 discoverability aids (§24). Only set for operations that need a top-level
+    # ``domains`` argument; surfaced in capabilities so an agent sees the required shape
+    # without a failed call. Left at their defaults for operations that take no domains.
+    requires_domains: bool = False
+    domain_schema: dict[str, Any] | None = None
+    example_request: dict[str, Any] | None = None
 
     @property
     def proof_capable(self) -> bool:
@@ -187,6 +193,24 @@ _INEQ = _obj(
         "expr_ast_right": {"type": "object"},
     },
 )
+
+# Schema for the top-level ``domains`` argument that finite operations require. Exposed in
+# capabilities (§24/§7.2) so the agent sees that ``domains`` is a *top-level* argument with
+# a finite-set (``values``) or bounded-integer (``lower``/``upper``) form per variable.
+_FINITE_DOMAIN_SCHEMA: dict[str, Any] = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "required": ["variable", "kind"],
+        "properties": {
+            "variable": {"type": "string"},
+            "kind": {"type": "string", "enum": ["finite", "integer"]},
+            "values": {"type": "array", "items": {"type": "string"}},
+            "lower": {"type": "string"},
+            "upper": {"type": "string"},
+        },
+    },
+}
 
 
 def _build_specs() -> list[OperationSpec]:  # noqa: C901 - a flat declarative table
@@ -398,6 +422,46 @@ def _build_specs() -> list[OperationSpec]:  # noqa: C901 - a flat declarative ta
             example_payload={"expression": "(x-3)**2 + 2", "variables": ["x"], "goal": "min"},
         )
     )
+    specs.append(
+        _op(
+            public_tool="calculus_compute",
+            operation="constrained_optimize",
+            backend="scipy",
+            state="implemented",
+            risk="high",
+            runs_in_subprocess=True,
+            numeric_only=False,
+            max_certainty="evidence",
+            method_hint="numeric_optimization",
+            result_kinds=["object", "witness"],
+            determinism="deterministic",
+            complexity_class="solver_dependent",
+            accepted_input_forms=["expression_string"],
+            payload_schema=_obj(
+                ["objective", "variables", "constraints"],
+                {
+                    "objective": _str(5000),
+                    "variables": _str_array(20),
+                    "goal": _enum("min", "max"),
+                    "constraints": {
+                        "type": "array",
+                        "maxItems": 20,
+                        "items": {"type": "object"},
+                    },
+                    "method": _enum("symbolic_lagrange", "numeric"),
+                    "parameterization": {"type": "object"},
+                    "start": _str_array(20),
+                },
+            ),
+            example_payload={
+                "objective": "x**2 + y**2",
+                "variables": ["x", "y"],
+                "goal": "min",
+                "constraints": [{"relation": "==", "left": "x + y", "right": "1"}],
+                "method": "symbolic_lagrange",
+            },
+        )
+    )
 
     # ----- verification_compute -------------------------------------------
     specs.append(
@@ -454,8 +518,45 @@ def _build_specs() -> list[OperationSpec]:  # noqa: C901 - a flat declarative ta
             },
         )
     )
-
-    # ----- z3_compute ------------------------------------------------------
+    specs.append(
+        _op(
+            public_tool="verification_compute",
+            operation="check_identity_constrained",
+            proof_modes=["symbolic", "counterexample"],
+            max_certainty="proved",
+            result_kinds=["verification", "witness"],
+            complexity_class="solver_dependent",
+            accepted_input_forms=["expression_string", "expr_ast"],
+            payload_schema=_obj(
+                ["left", "right"],
+                {
+                    "left": _str(5000),
+                    "right": _str(5000),
+                    "variables": _str_array(20),
+                    "constraints": {
+                        "type": "array",
+                        "maxItems": 20,
+                        "items": {"type": "object"},
+                    },
+                    "parameterization": {"type": "object"},
+                    "substitutions": {"type": "object"},
+                    "samples": _int(1, 100000),
+                },
+            ),
+            example_payload={
+                "left": "x**2/4 + y**2/3",
+                "right": "1",
+                "variables": ["x", "y"],
+                "constraints": [
+                    {"relation": "==", "left": "x**2/4 + y**2/3", "right": "1"}
+                ],
+                "parameterization": {
+                    "variables": ["t"],
+                    "substitutions": {"x": "2*cos(t)", "y": "sqrt(3)*sin(t)"},
+                },
+            },
+        )
+    )
     _Z3_VARS = {"type": "object", "additionalProperties": {"type": "string"}}
     specs.append(
         _op(
@@ -630,6 +731,16 @@ def _build_specs() -> list[OperationSpec]:  # noqa: C901 - a flat declarative ta
                 },
             ),
             example_payload={"predicate": "Eq(x + y, 3)", "variables": ["x", "y"]},
+            requires_domains=True,
+            domain_schema=_FINITE_DOMAIN_SCHEMA,
+            example_request={
+                "operation": "finite_enumeration",
+                "payload": {"predicate": "Eq(x + y, 3)", "variables": ["x", "y"]},
+                "domains": [
+                    {"variable": "x", "kind": "integer", "lower": "0", "upper": "3"},
+                    {"variable": "y", "kind": "integer", "lower": "0", "upper": "3"},
+                ],
+            },
         )
     )
     specs.append(
@@ -1410,6 +1521,19 @@ def _build_specs() -> list[OperationSpec]:  # noqa: C901 - a flat declarative ta
                 },
             ),
             example_payload={"quantifier": "forall", "predicate": "x**2 >= 0", "variables": ["x"]},
+            requires_domains=True,
+            domain_schema=_FINITE_DOMAIN_SCHEMA,
+            example_request={
+                "operation": "finite_quantifier_check",
+                "payload": {
+                    "quantifier": "forall",
+                    "predicate": "x**2 >= 0",
+                    "variables": ["x"],
+                },
+                "domains": [
+                    {"variable": "x", "kind": "integer", "lower": "-3", "upper": "3"},
+                ],
+            },
         )
     )
 
@@ -1731,3 +1855,114 @@ def public_tools() -> list[str]:
         if s.public_tool not in seen:
             seen.append(s.public_tool)
     return seen
+
+
+# ---------------------------------------------------------------------------
+# Operation aliases (V1 §5/§24).
+#
+# Intuitive short names an agent is likely to try, resolved to the canonical operation
+# *within a single public tool*. Aliases never replace canonical names: the registry
+# primary key, docs, tests, and golden cases all use the canonical operation. A real
+# operation name always wins over an alias, so the dispatcher only consults this map when
+# a direct lookup misses. Each alias must point to an operation that exists in the same
+# tool and must not collide with a real operation name (asserted at import below).
+# ---------------------------------------------------------------------------
+
+_ALIASES: dict[str, dict[str, str]] = {
+    "algebra_compute": {
+        "simplify": "simplify_expression",
+        "expand": "expand_expression",
+        "factor": "factor_expression",
+        "cancel": "cancel_expression",
+        "together": "together_expression",
+        "solve": "solve_equation",
+        "roots": "polynomial_roots",
+        "groebner": "groebner_basis",
+    },
+    "trigonometry_compute": {
+        "simplify": "trig_simplify",
+        "expand": "trig_expand",
+        "reduce": "trig_reduce",
+        "rewrite": "trig_rewrite",
+        "solve": "solve_trig_equation",
+        "identity_check": "trig_identity_check",
+        "check_identity": "trig_identity_check",
+    },
+}
+
+
+def resolve_alias(public_tool: str, operation: str) -> str | None:
+    """Return the canonical operation an alias maps to, or None if not a known alias."""
+    return _ALIASES.get(public_tool, {}).get(operation)
+
+
+def aliases_for_tool(public_tool: str) -> dict[str, str]:
+    """Return a copy of the alias→canonical map for one public tool (may be empty)."""
+    return dict(_ALIASES.get(public_tool, {}))
+
+
+def visible_operations_for_tool(public_tool: str) -> list[OperationSpec]:
+    """Operations an agent can discover by default (implemented + still-callable deprecated)."""
+    return [
+        s for s in operations_for_tool(public_tool) if s.state in ("implemented", "deprecated")
+    ]
+
+
+def suggest_operations(
+    public_tool: str, operation: str, *, limit: int = 3
+) -> tuple[list[str], str | None]:
+    """Recommend canonical operations for an unknown ``operation`` (V1 §6.2).
+
+    Priority: (1) exact alias match; (2) fuzzy match against the intuitive alias names and
+    the canonical operation names; (3) substring/keyword overlap. Returns up to ``limit``
+    canonical names and the source label (``alias`` | ``close_match`` | ``keyword`` | None).
+    """
+    import difflib
+
+    visible = [s.operation for s in visible_operations_for_tool(public_tool)]
+    alias_map = _ALIASES.get(public_tool, {})
+
+    canonical = alias_map.get(operation)
+    if canonical is not None and canonical in visible:
+        return [canonical], "alias"
+
+    # Fuzzy match against alias keys (intuitive names) and canonical operations, then map
+    # any matched alias key to its canonical operation. This catches typos like
+    # "simlify" -> "simplify" -> "simplify_expression".
+    ordered: list[str] = []
+
+    def _add(name: str) -> None:
+        if name in visible and name not in ordered:
+            ordered.append(name)
+
+    for key in difflib.get_close_matches(operation, list(alias_map), n=limit, cutoff=0.7):
+        _add(alias_map[key])
+    for op in difflib.get_close_matches(operation, visible, n=limit, cutoff=0.6):
+        _add(op)
+    if ordered:
+        return ordered[:limit], "close_match"
+
+    needle = operation.lower()
+    keyword = [op for op in visible if needle in op.lower() or op.lower() in needle]
+    if keyword:
+        return keyword[:limit], "keyword"
+    return [], None
+
+
+def _validate_aliases() -> None:
+    """Fail fast at import if an alias is malformed (points nowhere / shadows a real op)."""
+    for tool, mapping in _ALIASES.items():
+        real_ops = {s.operation for s in operations_for_tool(tool)}
+        for alias, target in mapping.items():
+            if alias in real_ops:
+                raise ValueError(
+                    f"alias '{alias}' for '{tool}' collides with a real operation name"
+                )
+            if target not in real_ops:
+                raise ValueError(
+                    f"alias '{alias}' for '{tool}' points to unknown operation '{target}'"
+                )
+
+
+_validate_aliases()
+
