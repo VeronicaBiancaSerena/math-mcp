@@ -1,0 +1,8 @@
+[
+  {"tool":"verification_compute","input":{"operation":"check_identity","payload":{"left":"sin(x)**2 + cos(x)**2","right":"1","variables":["x"]}},
+   "expected":{"ok":true,"status":"proved_by_symbolic_simplification","certainty":"proved","method":"symbolic","result_kind":"verification","result":"0"}},
+  {"tool":"verification_compute","input":{"operation":"check_identity_constrained","payload":{"left":"x**2/4 + y**2/3","right":"1","variables":["x","y"],"constraints":[{"relation":"==","left":"x**2/4 + y**2/3","right":"1"}],"parameterization":{"variables":["t"],"substitutions":{"x":"2*cos(t)","y":"sqrt(3)*sin(t)"}}}},
+   "expected":{"ok":true,"status":"proved_by_symbolic_simplification","certainty":"proved","method":"symbolic","result_kind":"verification"}},
+  {"tool":"verification_compute","input":{"operation":"check_identity_constrained","payload":{"left":"x + y","right":"1","variables":["x","y"],"constraints":[{"relation":"==","left":"x + y","right":"1"}],"substitutions":{"y":"1 - x"}}},
+   "expected":{"ok":true,"status":"proved_by_symbolic_simplification","certainty":"proved","method":"symbolic","result_kind":"verification"}}
+]

@@ -36,6 +36,7 @@ from math_mcp.parsing.domain_parser import NormalizedConstraints, normalize
 from math_mcp.runtime.limits import normalize_limits
 from math_mcp.runtime.subprocess_runner import run_in_subprocess
 from math_mcp.runtime.timing import Stopwatch
+from math_mcp.schema_check import validate_payload
 from math_mcp.schemas import AssumptionSpec, DomainSpec, Limits, ToolResult
 from math_mcp.tools.base import Ctx, Outcome
 from math_mcp.tools.versions import backend_versions
@@ -138,6 +139,29 @@ def _resolve_operation(public_tool: str, operation: str) -> tuple[OperationSpec,
     return spec, canonical, operation, alias_resolved
 
 
+def _validate_payload_against_schema(spec: OperationSpec, payload: dict[str, Any]) -> None:
+    """Gate the call on the advertised ``payload_schema`` before any backend runs.
+
+    This makes the schema shown in ``math_capabilities`` the *actual* runtime contract:
+    wrong types, missing required fields, bad enum values, and out-of-bound numbers are
+    rejected here with a clear message instead of failing deep in a handler or silently.
+    ``reject_additional=False`` keeps unknown keys tolerated — handlers ignore them, and
+    the deliberate ``payload.domains`` misplacement is turned into a migration hint by the
+    discrete handler (guide §24.5). ``enforce_required=False`` leaves required-field
+    checking to the handlers, which correctly accept ``expression`` *or* ``expr_ast``.
+    Gating here also means a malformed payload for a subprocess-bound operation never
+    spawns a sandbox.
+    """
+    errors = validate_payload(
+        payload, spec.payload_schema, reject_additional=False, enforce_required=False
+    )
+    if errors:
+        raise InvalidInput(
+            f"payload does not match the schema for '{spec.operation}': "
+            + "; ".join(errors[:5])
+        )
+
+
 def run_operation(
     public_tool: str,
     operation: str,
@@ -161,6 +185,8 @@ def run_operation(
         if spec.state == "disabled":
             reason = spec.disabled_reason or "operation is disabled"
             raise UnsupportedOperation(f"operation '{op_canonical}' is disabled: {reason}")
+
+        _validate_payload_against_schema(spec, payload_dict)
 
         constraints = normalize(domain_specs, assumption_specs, limits=norm_limits)
 

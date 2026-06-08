@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from conftest import call
+import pytest
+from conftest import call, load_golden
+
+
+@pytest.mark.parametrize(
+    "case", load_golden("verification_cases.json"), ids=lambda c: c["input"]["operation"]
+)
+def test_golden(case, golden) -> None:
+    golden(case)
 
 
 def test_identity_proved_symbolically() -> None:
@@ -169,3 +177,43 @@ def test_constrained_sampling_no_counterexample_is_evidence() -> None:
     assert result.ok and result.status == "numeric_evidence_only"
     assert result.certainty == "evidence"
     assert "numeric sampling is not proof" in result.warnings
+
+
+def test_parameterized_disproof_requires_a_feasible_witness() -> None:
+    # x == |x| holds on the feasible region x>=0, but the parameterization x=t,y=t also
+    # covers t<0. A parameter value t=-1 maps to x=-1, which VIOLATES x>=0, so it must NOT
+    # be reported as a counterexample. With no feasible counterexample -> evidence.
+    result = call(
+        "verification_compute",
+        "check_identity_constrained",
+        {
+            "left": "x",
+            "right": "Abs(x)",
+            "variables": ["x", "y"],
+            "constraints": [
+                {"relation": "==", "left": "x", "right": "y"},
+                {"relation": ">=", "left": "x", "right": "0"},
+            ],
+            "parameterization": {"variables": ["t"], "substitutions": {"x": "t", "y": "t"}},
+        },
+    )
+    assert result.ok and result.certainty == "evidence"
+    assert result.status == "numeric_evidence_only"
+
+
+def test_parameterized_disproof_at_a_feasible_point() -> None:
+    # x == 2 is false at the feasible point x=0 (satisfies x>=0): a genuine disproof whose
+    # witness is a real feasible point.
+    result = call(
+        "verification_compute",
+        "check_identity_constrained",
+        {
+            "left": "x",
+            "right": "2",
+            "variables": ["x"],
+            "constraints": [{"relation": ">=", "left": "x", "right": "0"}],
+            "parameterization": {"variables": ["t"], "substitutions": {"x": "t"}},
+        },
+    )
+    assert result.ok and result.certainty == "disproved"
+    assert "point" in result.result

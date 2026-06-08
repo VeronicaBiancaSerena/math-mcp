@@ -8,5 +8,7 @@
   {"tool":"calculus_compute","input":{"operation":"limit_expression","payload":{"expression":"sin(x)/x","variable":"x","point":"0"}},
    "expected":{"ok":true,"certainty":"exact","result":"1"}},
   {"tool":"calculus_compute","input":{"operation":"numeric_optimize","payload":{"expression":"(x-3)**2 + 2","variables":["x"],"goal":"min"}},
-   "expected":{"ok":true,"status":"success","certainty":"evidence","method":"numeric_optimization","result_kind":"witness"}}
+   "expected":{"ok":true,"status":"success","certainty":"evidence","method":"numeric_optimization","result_kind":"witness"}},
+  {"tool":"calculus_compute","input":{"operation":"constrained_optimize","payload":{"objective":"x**2 + y**2","variables":["x","y"],"goal":"min","constraints":[{"relation":"==","left":"x + y","right":"1"}],"method":"symbolic_lagrange"}},
+   "expected":{"ok":true,"status":"success","certainty":"evidence","method":"symbolic","result_kind":"object"}}
 ]

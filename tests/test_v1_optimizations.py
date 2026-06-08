@@ -177,3 +177,63 @@ def test_finite_enumeration_domains_in_payload_gets_migration_hint() -> None:
     assert result.error_code == "DOMAIN_UNSUPPORTED"
     assert "domains inside payload" in (result.error or "")
     assert "top-level argument" in (result.error or "")
+
+
+# --- runtime payload_schema gate (guide §24.10) ----------------------------
+
+
+def test_schema_gate_rejects_bad_enum_before_backend() -> None:
+    result = call(
+        "calculus_compute",
+        "constrained_optimize",
+        {
+            "objective": "x",
+            "variables": ["x"],
+            "goal": "maximize",  # not in enum {min, max}
+            "constraints": [{"relation": "==", "left": "x", "right": "1"}],
+        },
+    )
+    assert result.ok is False
+    assert result.status == "invalid_input"
+    assert result.backend == "none"
+    assert "schema" in (result.error or "")
+
+
+def test_schema_gate_rejects_wrong_type() -> None:
+    result = call("matrix_compute", "det", {"matrix": "not-a-matrix"})
+    assert result.ok is False
+    assert result.status == "invalid_input"
+    assert result.backend == "none"
+
+
+def test_schema_gate_rejects_out_of_bounds() -> None:
+    result = call(
+        "verification_compute",
+        "search_counterexample",
+        {"left": "x", "relation": ">", "right": "0", "variables": ["x"], "samples": 10**9},
+    )
+    assert result.ok is False
+    assert result.status == "invalid_input"
+
+
+def test_schema_gate_preserves_expr_ast_alternative() -> None:
+    # 'expression' is schema-required, but expr_ast is an accepted alternative; the gate
+    # must not reject a valid expr_ast-only payload (required-checking stays in handlers).
+    result = call(
+        "algebra_compute",
+        "simplify_expression",
+        {"expr_ast": {"op": "add", "args": [{"var": "x"}, {"var": "x"}]}, "variables": ["x"]},
+    )
+    assert result.ok and result.result == "2*x"
+
+
+def test_schema_gate_still_routes_bad_ast_to_invalid_ast() -> None:
+    # A structurally-typed-but-invalid expr_ast passes the schema gate (it is an object)
+    # and is rejected by the handler with INVALID_AST, not a generic schema error.
+    result = call(
+        "algebra_compute",
+        "simplify_expression",
+        {"expr_ast": {"op": "frobnicate", "args": [{"int": 1}]}},
+    )
+    assert result.ok is False
+    assert result.error_code == "INVALID_AST"

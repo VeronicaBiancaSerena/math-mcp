@@ -215,13 +215,19 @@ def _lagrange_optimize(
     for sol in solutions:
         if any(not sol.get(s, sp.Symbol("u")).is_real for s in syms):
             continue
-        point = {str(s): to_text(sol[s]) for s in syms if s in sol}
-        if len(point) != len(syms):
+        if not all(s in sol for s in syms):
             continue
         value = sp.simplify(objective.subs({s: sol[s] for s in syms}))
         if not value.is_real:
             continue
-        candidates.append({"point": point, "value": to_text(value), "_value": value})
+        candidates.append(
+            {
+                "point": {str(s): to_text(sol[s]) for s in syms},
+                "value": to_text(value),
+                "point_type": _classify_lagrange_point(lagrangian, syms, gs, sol),
+                "_value": value,
+            }
+        )
 
     if not candidates:
         return Outcome(
@@ -236,14 +242,19 @@ def _lagrange_optimize(
             metadata_extra={"method_detail": "symbolic_lagrange"},
         )
 
-    best = (max if goal == "max" else min)(candidates, key=lambda c: c["_value"])
+    # Prefer a critical point whose second-order type matches the goal (a verified local
+    # min for goal=min, local max for goal=max); otherwise fall back to the best objective
+    # value among all stationary points.
+    want = "local_min" if goal == "min" else "local_max"
+    pool = [c for c in candidates if c["point_type"] == want] or candidates
+    best = (max if goal == "max" else min)(pool, key=lambda c: c["_value"])
     for c in candidates:
         c.pop("_value", None)
-    best.pop("_value", None)
     result = {
         "goal": goal,
         "optimum": best["point"],
         "value": best["value"],
+        "optimum_point_type": best["point_type"],
         "candidates": candidates,
         "constraints": [f"{to_text(c['left'])} == {to_text(c['right'])}" for c in constraints],
     }
@@ -252,11 +263,58 @@ def _lagrange_optimize(
         certainty="evidence",
         method="symbolic",
         backend="sympy",
+        explanation=(
+            f"Selected the {goal} among {len(candidates)} Lagrange stationary point(s); "
+            f"reduced-Hessian second-order type of the chosen point: {best['point_type']}. "
+            "This is a candidate constrained extremum, not a proof of global optimality, "
+            "and boundary/unbounded extrema are not checked."
+        ),
         warnings=[
             "Lagrange critical points are candidate extrema; global optimality is not proved"
         ],
         metadata={"method_detail": "symbolic_lagrange"},
     )
+
+
+def _classify_lagrange_point(
+    lagrangian: Any, syms: list[Any], gs: list[Any], sol: dict[Any, Any]
+) -> str:
+    """Second-order classification of an equality-constrained stationary point.
+
+    Uses the reduced (projected) Hessian: with ``Z`` a basis for the null space of the
+    constraint Jacobian, the chosen point is a local min if ``Zᵀ H_L Z`` is positive
+    definite, a local max if negative definite, a saddle if indefinite. Returns
+    ``"indeterminate"`` when SymPy cannot decide a sign (e.g. a zero eigenvalue) or the
+    point is non-regular. Defensive by construction — any failure degrades to
+    ``"indeterminate"`` rather than raising.
+    """
+    try:
+        hessian = sp.hessian(lagrangian, syms).subs(sol)
+        jac = sp.Matrix([[sp.diff(g, s) for s in syms] for g in gs]).subs(sol)
+        null_basis = jac.nullspace()
+        if not null_basis:
+            return "indeterminate"
+        z = sp.Matrix.hstack(*null_basis)
+        reduced = sp.simplify(z.T * hessian * z)
+        signs: set[int] = set()
+        for ev in reduced.eigenvals():
+            if ev.is_positive:
+                signs.add(1)
+            elif ev.is_negative:
+                signs.add(-1)
+            elif ev.is_zero:
+                signs.add(0)
+            else:
+                return "indeterminate"
+        if signs == {1}:
+            return "local_min"
+        if signs == {-1}:
+            return "local_max"
+        if signs == {0}:
+            return "indeterminate"
+        return "saddle"
+    except Exception:  # noqa: BLE001 - classification is best-effort, never fatal
+        return "indeterminate"
 
 
 def _numeric_constrained(

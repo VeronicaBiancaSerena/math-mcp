@@ -84,7 +84,25 @@ def test_constrained_optimize_symbolic_lagrange() -> None:
     assert result.method == "symbolic"
     assert result.result["optimum"] == {"x": "1/2", "y": "1/2"}
     assert result.result["value"] == "1/2"
+    assert result.result["optimum_point_type"] == "local_min"  # reduced-Hessian classification
     assert result.metadata["method_detail"] == "symbolic_lagrange"
+
+
+def test_constrained_optimize_lagrange_classifies_local_max() -> None:
+    # max x*y s.t. x + y = 10  ->  (5,5); the reduced Hessian must classify it local_max.
+    result = call(
+        "calculus_compute",
+        "constrained_optimize",
+        {
+            "objective": "x*y",
+            "variables": ["x", "y"],
+            "goal": "max",
+            "constraints": [{"relation": "==", "left": "x + y", "right": "10"}],
+            "method": "symbolic_lagrange",
+        },
+    )
+    assert result.ok and result.result["optimum"] == {"x": "5", "y": "5"}
+    assert result.result["optimum_point_type"] == "local_max"
 
 
 def test_constrained_optimize_numeric_with_residuals() -> None:

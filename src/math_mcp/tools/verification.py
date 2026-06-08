@@ -222,6 +222,7 @@ def check_identity_constrained(ctx: Ctx) -> Outcome:
             sub_dict=param["substitutions"],
             value_symbols=param_vars or None,
             mode="parameterized_symbolic",
+            original_names=var_names,
         )
 
     subs_payload = ctx.get("substitutions")
@@ -234,6 +235,7 @@ def check_identity_constrained(ctx: Ctx) -> Outcome:
             sub_dict=subs_payload,
             value_symbols=allowed,
             mode="substitution_symbolic",
+            original_names=var_names,
         )
 
     return _constrained_sampling(ctx, left, right, constraints, var_names)
@@ -265,12 +267,15 @@ def _constrained_symbolic(
     sub_dict: dict[str, Any],
     value_symbols: set[str] | None,
     mode: str,
+    original_names: list[str],
 ) -> Outcome:
     """Prove an identity on the constraint surface via an explicit substitution.
 
     The substitution (a parameterization or a constraint-elimination) must first satisfy
     every equality constraint; otherwise the request is reported as unsupported rather
-    than silently trusted.
+    than silently trusted. A counterexample (when ``left - right`` does not reduce to 0)
+    is only reported when the mapped original-variable point satisfies *every* constraint —
+    including inequalities — so a disproof is always a genuine feasible point.
     """
     subs = {
         parse_symbol(str(var)): parse_expression(
@@ -312,7 +317,7 @@ def _constrained_symbolic(
             metadata=metadata,
         )
 
-    witness = _deterministic_counterexample(difference)
+    witness = _symbolic_counterexample(ctx, difference, subs, constraints, original_names)
     if witness is not None:
         return verification_result(
             status="disproved_by_counterexample",
@@ -353,6 +358,59 @@ def _unsatisfied_equality_constraints(
         if residual != 0:
             bad.append(_constraint_text(c))
     return bad
+
+
+def _symbolic_counterexample(
+    ctx: Ctx,
+    difference: Any,
+    subs: dict[Any, Any],
+    constraints: list[dict[str, Any]],
+    original_names: list[str],
+) -> dict[str, Any] | None:
+    """Find a *feasible* counterexample for the substituted difference, or None.
+
+    Searches a deterministic grid over the reduced variables (the parameters, or the
+    free original variables left by an elimination), maps each grid point back to the
+    original variables through ``subs``, and accepts it only when that point satisfies
+    every constraint — equalities (held by the substitution) and, crucially, the
+    inequalities the parameterization could otherwise leave. This is what keeps a
+    parameterized/substitution disproof sound: the witness is always a genuine feasible
+    point, never an out-of-region parameter value.
+    """
+    sub_value_syms: set[Any] = set()
+    for expr in subs.values():
+        sub_value_syms |= getattr(expr, "free_symbols", set())
+    grid_syms = sorted(set(difference.free_symbols) | sub_value_syms, key=str)
+    if not grid_syms:
+        return None
+    grids = [_candidate_values(ctx, str(s)) for s in grid_syms]
+    orig_syms = {name: parse_symbol(name) for name in original_names}
+
+    count = 0
+    for combo in itertools.product(*grids):
+        count += 1
+        if count > ctx.limits.max_samples:
+            break
+        reduced = dict(zip(grid_syms, combo, strict=True))
+        orig_assignment: dict[Any, Any] = {}
+        for name in original_names:
+            sym = orig_syms[name]
+            if sym in subs:
+                orig_assignment[sym] = subs[sym].subs(reduced)
+            elif sym in reduced:
+                orig_assignment[sym] = reduced[sym]
+        if not _feasible(constraints, orig_assignment):
+            continue
+        try:
+            value = complex(difference.subs(reduced).evalf())
+        except (TypeError, ValueError):
+            continue
+        if abs(value) > _TOL:
+            return {
+                "parameters": {str(s): to_text(v) for s, v in reduced.items()},
+                "point": {str(s): to_text(v) for s, v in orig_assignment.items()},
+            }
+    return None
 
 
 def _constrained_sampling(

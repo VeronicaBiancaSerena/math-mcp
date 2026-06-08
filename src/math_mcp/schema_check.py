@@ -36,14 +36,41 @@ def _type_ok(value: Any, type_name: str) -> bool:
     return isinstance(value, expected)
 
 
-def validate_payload(payload: Any, schema: dict[str, Any], path: str = "payload") -> list[str]:
-    """Return a list of human-readable validation errors (empty == valid)."""
+def validate_payload(
+    payload: Any,
+    schema: dict[str, Any],
+    path: str = "payload",
+    *,
+    reject_additional: bool = True,
+    enforce_required: bool = True,
+) -> list[str]:
+    """Return a list of human-readable validation errors (empty == valid).
+
+    ``reject_additional`` controls whether unknown object keys are flagged. The
+    conformance oracle keeps the default (``True``, honoring ``additionalProperties: false``
+    exactly). The runtime dispatch gate passes ``False`` so that harmless extra fields —
+    and the deliberate ``payload.domains`` misplacement that the discrete handler turns
+    into a migration hint (guide §24.5) — still reach the handler.
+
+    ``enforce_required`` controls the ``required`` list. The oracle keeps it ``True``; the
+    runtime gate passes ``False`` and leaves required-field checking to the handlers,
+    because several operations accept *either* ``expression`` *or* ``expr_ast`` (an OR the
+    flat schema subset cannot express). The gate still enforces type / enum / bounds /
+    lengths — exactly where handlers are intentionally lenient.
+    """
     errors: list[str] = []
-    _validate(payload, schema, path, errors)
+    _validate(payload, schema, path, errors, reject_additional, enforce_required)
     return errors
 
 
-def _validate(value: Any, schema: dict[str, Any], path: str, errors: list[str]) -> None:
+def _validate(
+    value: Any,
+    schema: dict[str, Any],
+    path: str,
+    errors: list[str],
+    reject_additional: bool = True,
+    enforce_required: bool = True,
+) -> None:
     type_name = schema.get("type")
     if type_name is not None and not _type_ok(value, type_name):
         errors.append(f"{path}: expected type {type_name}, got {type(value).__name__}")
@@ -70,18 +97,26 @@ def _validate(value: Any, schema: dict[str, Any], path: str, errors: list[str]) 
         item_schema = schema.get("items")
         if isinstance(item_schema, dict):
             for i, item in enumerate(value):
-                _validate(item, item_schema, f"{path}[{i}]", errors)
+                _validate(
+                    item, item_schema, f"{path}[{i}]", errors, reject_additional, enforce_required
+                )
 
     if type_name == "object" and isinstance(value, dict):
         properties: dict[str, Any] = schema.get("properties", {})
-        for required in schema.get("required", []):
-            if required not in value:
-                errors.append(f"{path}: missing required field '{required}'")
+        if enforce_required:
+            for required in schema.get("required", []):
+                if required not in value:
+                    errors.append(f"{path}: missing required field '{required}'")
         additional = schema.get("additionalProperties", True)
         for key, sub in value.items():
             if key in properties:
-                _validate(sub, properties[key], f"{path}.{key}", errors)
+                _validate(
+                    sub, properties[key], f"{path}.{key}", errors, reject_additional,
+                    enforce_required,
+                )
             elif isinstance(additional, dict):
-                _validate(sub, additional, f"{path}.{key}", errors)
-            elif additional is False:
+                _validate(
+                    sub, additional, f"{path}.{key}", errors, reject_additional, enforce_required
+                )
+            elif additional is False and reject_additional:
                 errors.append(f"{path}: unexpected field '{key}'")
