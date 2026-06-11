@@ -9,4 +9,4 @@ from math_mcp.config import CAPABILITIES_VERSION, SCHEMA_VERSION, SERVER_NAME
 
 __all__ = ["SERVER_NAME", "SCHEMA_VERSION", "CAPABILITIES_VERSION", "__version__"]
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"

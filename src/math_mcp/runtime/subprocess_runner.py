@@ -74,8 +74,12 @@ def _clean_env(src_root: str) -> dict[str, str]:
         "PATH": f"{_env_prefix()}/bin:/usr/bin:/bin",
         "PYTHONPATH": src_root,
         "HOME": "/tmp",
-        "LC_ALL": "C",
-        "LANG": "C",
+        # Keep the sandbox deterministic while still allowing Python's site module to
+        # read editable-install .pth files whose source path contains non-ASCII text.
+        # Plain "C" makes Python decode those .pth files as ASCII before our worker
+        # starts, which breaks checkouts under paths such as "文档/math-mcp".
+        "LC_ALL": "C.UTF-8",
+        "LANG": "C.UTF-8",
         "PYTHONIOENCODING": "utf-8",
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONNOUSERSITE": "1",

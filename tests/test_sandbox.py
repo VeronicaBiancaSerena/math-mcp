@@ -27,6 +27,12 @@ def _diag(operation: str, payload: dict, limits: Limits) -> dict:
     return run_in_subprocess("_diag", operation, payload, limits, [], [])
 
 
+def test_clean_env_keeps_utf8_locale_for_non_ascii_editable_paths() -> None:
+    env = subprocess_runner._clean_env("/tmp/文档/math-mcp/src")
+    assert env["LC_ALL"].upper().endswith("UTF-8")
+    assert env["LANG"] == env["LC_ALL"]
+
+
 @requires_sandbox
 def test_network_is_isolated() -> None:
     out = _diag("_net_probe", {"host": "8.8.8.8", "port": 53}, Limits(timeout_ms=8000))

@@ -27,3 +27,6 @@ htmlcov/
 
 # Local environment
 .env
+
+# Local runtime/cache artifacts
+.openalex_mcp_cache.sqlite3
